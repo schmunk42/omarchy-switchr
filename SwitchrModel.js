@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 19:42:57 UTC
 //
 // Pure functions that turn a Format Version 1 document from
 // helper/switchr.py into the flat row list the overlay draws. No QML
@@ -84,6 +84,7 @@ function headerRow(entry) {
     src: -1,
     rowId: "ws:" + workspaceKey(entry),
     depth: 0,
+    indent: 0,
     main: label !== "" && title !== "" ? label + "  " + title : (label || title || oneLine(ws.name)),
     detail: oneLine(entry.monitor),
     isActive: false,
@@ -193,6 +194,10 @@ function buildRows(entries, filterText) {
       src: i,
       rowId: String(entry.id),
       depth: Math.max(0, Number(entry.depth) || 0),
+      // Indent steps for rendering. Rows are flush; only a herdr pane (the
+      // child of a tab with two or more panes) keeps one step so it reads as
+      // belonging to its tab. `depth` stays as the helper reported it.
+      indent: entry.type === "herdr_pane" ? 1 : 0,
       main: oneLine(entry.label),
       detail: oneLine(entry.detail),
       isActive: entry.active === true,

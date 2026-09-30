@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 19:42:57 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, grouped by workspace.
@@ -84,6 +84,7 @@ Item {
   readonly property int entryHeight: Math.max(Style.space(40), Style.font.title + Style.font.caption + Style.spacing.md * 2 + Style.spacing.xxs)
   readonly property int sectionHeight: Style.font.bodySmall + Style.spacing.lg * 2
   readonly property int hintHeight: Style.font.bodySmall + Style.spacing.md * 2
+  readonly property int hostHeight: Style.font.caption + Style.spacing.sm * 2
   readonly property int indentStep: Style.space(18)
 
   readonly property string statusText: {
@@ -463,6 +464,7 @@ Item {
               required property int src
               required property string rowId
               required property int depth
+              required property int indent
               required property string main
               required property string detail
               required property bool isActive
@@ -471,16 +473,19 @@ Item {
               required property bool contextOnly
 
               readonly property bool hasCursor: row.selectable && row.index === root.selectedIndex
-              readonly property int indent: row.depth * root.indentStep
+              // Rows are flush; only herdr panes carry one step (see
+              // SwitchrModel.buildRows). `depth` is not used for layout.
+              readonly property int indentX: row.indent * root.indentStep
               // "host": a terminal window whose herdr tabs are listed below
-              // it. Drawn like an entry, but muted, as a header line; it is
-              // not selectable (see SwitchrModel.herdrHosts).
+              // it. Drawn as a muted text-only sub-heading, smaller than a
+              // workspace header; it is not selectable (see
+              // SwitchrModel.herdrHosts).
               readonly property bool isHost: row.kind === "host"
-              readonly property bool isEntryLike: row.kind === "entry" || row.isHost
 
               width: ListView.view.width
               height: row.kind === "header" ? root.sectionHeight
                       : row.kind === "hint" ? root.hintHeight
+                      : row.isHost ? root.hostHeight
                       : root.entryHeight
               radius: root.cornerRadius
               color: row.hasCursor ? root.selectedBackground : "transparent"
@@ -528,7 +533,7 @@ Item {
                 visible: row.kind === "hint"
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: Style.spacing.rowPaddingX + row.indent
+                anchors.leftMargin: Style.spacing.rowPaddingX + row.indentX
                 anchors.rightMargin: Style.spacing.rowPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
@@ -542,12 +547,31 @@ Item {
                 maximumLineCount: 1
               }
 
-              // Entry (and host): main line and detail line, active marker
-              // on the left, agent status on the right.
+              // Host: the window title as one muted line, nothing else --
+              // no detail, marker, status or background.
+              Text {
+                visible: row.isHost
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Style.spacing.rowPaddingX
+                anchors.rightMargin: Style.spacing.rowPaddingX
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: row.isHost ? row.main : ""
+                color: root.foreground
+                opacity: 0.5
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+                maximumLineCount: 1
+              }
+
+              // Entry: main line and detail line, active marker on the left,
+              // agent status on the right.
               Item {
-                visible: row.isEntryLike
+                visible: row.kind === "entry"
                 anchors.fill: parent
-                anchors.leftMargin: Style.spacing.rowPaddingX + row.indent
+                anchors.leftMargin: Style.spacing.rowPaddingX + row.indentX
                 anchors.rightMargin: Style.spacing.rowPaddingX
 
                 Rectangle {
@@ -555,8 +579,8 @@ Item {
                   visible: row.isActive
                   anchors.left: parent.left
                   // One md of air between marker and text; clamped so the
-                  // marker never leaves the row at depth 0.
-                  anchors.leftMargin: -Math.min(Style.spacing.md + width, Style.spacing.rowPaddingX + row.indent)
+                  // marker never leaves the row on a flush row.
+                  anchors.leftMargin: -Math.min(Style.spacing.md + width, Style.spacing.rowPaddingX + row.indentX)
                   anchors.verticalCenter: parent.verticalCenter
                   width: Math.max(2, Style.space(3))
                   height: parent.height - Style.spacing.md * 2
@@ -583,12 +607,12 @@ Item {
                   anchors.rightMargin: statusBadge.visible ? Style.spacing.lg : 0
                   anchors.verticalCenter: parent.verticalCenter
                   spacing: Style.spacing.xxs
-                  opacity: row.isHost ? 0.5 : row.contextOnly ? 0.6 : 1
+                  opacity: row.contextOnly ? 0.6 : 1
 
                   Text {
                     width: parent.width
                     textFormat: Text.PlainText
-                    text: row.isEntryLike ? row.main : ""
+                    text: row.kind === "entry" ? row.main : ""
                     color: row.hasCursor ? root.selectedText : root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.title
@@ -602,7 +626,7 @@ Item {
                     width: parent.width
                     visible: row.detail !== ""
                     textFormat: Text.PlainText
-                    text: row.isEntryLike ? row.detail : ""
+                    text: row.kind === "entry" ? row.detail : ""
                     color: root.foreground
                     opacity: 0.6
                     font.family: root.fontFamily
