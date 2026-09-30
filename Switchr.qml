@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 20:07:50 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 20:14:23 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, grouped by workspace.
@@ -547,8 +547,9 @@ Item {
                 maximumLineCount: 1
               }
 
-              // Host: the window title as one bold line at entry-label size,
-              // nothing else -- no detail, status or background.
+              // Host: the window title as one line at entry-label size, bold,
+              // muted (same tone as an entry's detail line), nothing else --
+              // no detail, status or background.
               Text {
                 visible: row.isHost
                 anchors.left: parent.left
@@ -559,6 +560,7 @@ Item {
                 textFormat: Text.PlainText
                 text: row.isHost ? row.main : ""
                 color: root.foreground
+                opacity: 0.6
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.title
                 font.bold: true
