@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 19:42:57 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 20:07:50 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, grouped by workspace.
@@ -84,7 +84,7 @@ Item {
   readonly property int entryHeight: Math.max(Style.space(40), Style.font.title + Style.font.caption + Style.spacing.md * 2 + Style.spacing.xxs)
   readonly property int sectionHeight: Style.font.bodySmall + Style.spacing.lg * 2
   readonly property int hintHeight: Style.font.bodySmall + Style.spacing.md * 2
-  readonly property int hostHeight: Style.font.caption + Style.spacing.sm * 2
+  readonly property int hostHeight: Style.font.title + Style.spacing.sm * 2
   readonly property int indentStep: Style.space(18)
 
   readonly property string statusText: {
@@ -477,8 +477,8 @@ Item {
               // SwitchrModel.buildRows). `depth` is not used for layout.
               readonly property int indentX: row.indent * root.indentStep
               // "host": a terminal window whose herdr tabs are listed below
-              // it. Drawn as a muted text-only sub-heading, smaller than a
-              // workspace header; it is not selectable (see
+              // it. Drawn as a bold text-only line at entry-label size; it
+              // is not selectable (see
               // SwitchrModel.herdrHosts).
               readonly property bool isHost: row.kind === "host"
 
@@ -547,8 +547,8 @@ Item {
                 maximumLineCount: 1
               }
 
-              // Host: the window title as one muted line, nothing else --
-              // no detail, marker, status or background.
+              // Host: the window title as one bold line at entry-label size,
+              // nothing else -- no detail, status or background.
               Text {
                 visible: row.isHost
                 anchors.left: parent.left
@@ -559,34 +559,20 @@ Item {
                 textFormat: Text.PlainText
                 text: row.isHost ? row.main : ""
                 color: root.foreground
-                opacity: 0.5
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Style.font.title
+                font.bold: true
                 elide: Text.ElideRight
                 maximumLineCount: 1
               }
 
-              // Entry: main line and detail line, active marker on the left,
-              // agent status on the right.
+              // Entry: main line and detail line, agent status on the right.
+              // The active entry is marked only by its bold main line.
               Item {
                 visible: row.kind === "entry"
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacing.rowPaddingX + row.indentX
                 anchors.rightMargin: Style.spacing.rowPaddingX
-
-                Rectangle {
-                  id: activeMarker
-                  visible: row.isActive
-                  anchors.left: parent.left
-                  // One md of air between marker and text; clamped so the
-                  // marker never leaves the row on a flush row.
-                  anchors.leftMargin: -Math.min(Style.spacing.md + width, Style.spacing.rowPaddingX + row.indentX)
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Math.max(2, Style.space(3))
-                  height: parent.height - Style.spacing.md * 2
-                  radius: width / 2
-                  color: root.selectedText
-                }
 
                 Text {
                   id: statusBadge
