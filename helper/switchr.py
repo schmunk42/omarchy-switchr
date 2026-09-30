@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# file generated with AI assistance: Claude Code - 2026-09-30 13:15:46 UTC
+# file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
 """switchr helper -- collect jump targets and jump to one of them.
 
 Two subcommands, both usable without a TTY and without any HERDR_*
@@ -70,9 +70,11 @@ An Entry:
                                      window); the overlay does not make it
                                      selectable.
     parent      string|null  id of the parent entry; null for window.
-    depth       int     Indentation depth: window 0, group_tab 1, herdr_tab
-                        one level below its window, herdr_pane one below its
-                        tab, hint one below its parent.
+    depth       int     Indentation depth: window 0, group_tab 0 (a group
+                        is windows side by side, not a hierarchy; `parent`
+                        still names the head), herdr_tab one level below its
+                        window, herdr_pane one below its tab, hint one below
+                        its parent.
     sort_key    [int]   Lexicographically comparable sort key; `entries` is
                         already sorted by it. Layout:
                         [workspace rank, window rank, group tab rank,
@@ -221,7 +223,8 @@ under `errors`.
 Groups: all members carry the same `grouped`. The visible tab is the member
 with `visible: true`, otherwise the one with the lowest `focusHistoryID`;
 it becomes the window entry, the others follow as group_tab in the order
-of `grouped`.
+of `grouped`, on the same depth as the window entry (0): the tabs of a group
+are siblings, `parent` only records which one is the head.
 
 herdr: which session runs in a terminal window is determined by
 `herdr_target()` (helper/herdr_target.py). Per session exactly one call
@@ -665,7 +668,7 @@ def collect():
         head_entry = window_entry(head, "window", None, 0, [wrank, wpos, -1, -1, -1, -1])
         tab_entries = []
         for rank, tab in enumerate(tabs):
-            te = window_entry(tab, "group_tab", head_entry["id"], 1,
+            te = window_entry(tab, "group_tab", head_entry["id"], 0,
                               [wrank, wpos, rank, -1, -1, -1])
             te["active"] = False
             tab_entries.append((te, tab))

@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 13:09:46 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, grouped by workspace.
@@ -472,6 +472,11 @@ Item {
 
               readonly property bool hasCursor: row.selectable && row.index === root.selectedIndex
               readonly property int indent: row.depth * root.indentStep
+              // "host": a terminal window whose herdr tabs are listed below
+              // it. Drawn like an entry, but muted, as a header line; it is
+              // not selectable (see SwitchrModel.herdrHosts).
+              readonly property bool isHost: row.kind === "host"
+              readonly property bool isEntryLike: row.kind === "entry" || row.isHost
 
               width: ListView.view.width
               height: row.kind === "header" ? root.sectionHeight
@@ -537,10 +542,10 @@ Item {
                 maximumLineCount: 1
               }
 
-              // Entry: main line and detail line, active marker on the
-              // left, agent status on the right.
+              // Entry (and host): main line and detail line, active marker
+              // on the left, agent status on the right.
               Item {
-                visible: row.kind === "entry"
+                visible: row.isEntryLike
                 anchors.fill: parent
                 anchors.leftMargin: Style.spacing.rowPaddingX + row.indent
                 anchors.rightMargin: Style.spacing.rowPaddingX
@@ -549,7 +554,9 @@ Item {
                   id: activeMarker
                   visible: row.isActive
                   anchors.left: parent.left
-                  anchors.leftMargin: -Style.spacing.md
+                  // One md of air between marker and text; clamped so the
+                  // marker never leaves the row at depth 0.
+                  anchors.leftMargin: -Math.min(Style.spacing.md + width, Style.spacing.rowPaddingX + row.indent)
                   anchors.verticalCenter: parent.verticalCenter
                   width: Math.max(2, Style.space(3))
                   height: parent.height - Style.spacing.md * 2
@@ -576,12 +583,12 @@ Item {
                   anchors.rightMargin: statusBadge.visible ? Style.spacing.lg : 0
                   anchors.verticalCenter: parent.verticalCenter
                   spacing: Style.spacing.xxs
-                  opacity: row.contextOnly ? 0.6 : 1
+                  opacity: row.isHost ? 0.5 : row.contextOnly ? 0.6 : 1
 
                   Text {
                     width: parent.width
                     textFormat: Text.PlainText
-                    text: row.kind === "entry" ? row.main : ""
+                    text: row.isEntryLike ? row.main : ""
                     color: row.hasCursor ? root.selectedText : root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.title
@@ -595,7 +602,7 @@ Item {
                     width: parent.width
                     visible: row.detail !== ""
                     textFormat: Text.PlainText
-                    text: row.kind === "entry" ? row.detail : ""
+                    text: row.isEntryLike ? row.detail : ""
                     color: root.foreground
                     opacity: 0.6
                     font.family: root.fontFamily

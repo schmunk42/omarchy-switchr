@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 13:09:46 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
 //
 // Pure functions that turn a Format Version 1 document from
 // helper/switchr.py into the flat row list the overlay draws. No QML
@@ -93,6 +93,21 @@ function headerRow(entry) {
   }
 }
 
+// A terminal window (window or group_tab) that hosts a listed herdr
+// session: at least one herdr_tab names it as parent. Its tabs are the jump
+// targets, so the window itself becomes a non-selectable "host" row. A
+// window whose only child is a hint (herdr --remote, timeout) is not a host
+// and stays selectable -- it is the only way to reach that window.
+function herdrHosts(list) {
+  var hosts = {}
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i]
+    if (e && e.type === "herdr_tab" && e.parent !== null && e.parent !== undefined)
+      hosts[String(e.parent)] = true
+  }
+  return hosts
+}
+
 // Builds the rows for the current filter. `entries` is already in display
 // order and is never re-sorted here. A matching child keeps its ancestors
 // visible (marked as `contextOnly`), and a workspace header is emitted only in
@@ -106,6 +121,7 @@ function buildRows(entries, filterText) {
     if (list[i] && list[i].id !== undefined && list[i].id !== null)
       indexById[String(list[i].id)] = i
   }
+  var hosts = herdrHosts(list)
 
   var matched = []
   var visible = []
@@ -133,6 +149,28 @@ function buildRows(entries, filterText) {
     }
   }
 
+  // A host row is not a jump target. When the filter matches only the host
+  // itself (its title, or the session name in its detail), its herdr
+  // descendants are shown as context, otherwise the result would contain
+  // no selectable row for that window.
+  for (i = 0; i < list.length; i++) {
+    if (!list[i] || visible[i])
+      continue
+    var up = list[i].parent
+    var hops = 0
+    while (up !== null && up !== undefined && hops < 64) {
+      var u = indexById[String(up)]
+      if (u === undefined)
+        break
+      if (matched[u] && hosts[String(list[u].id)] === true) {
+        visible[i] = true
+        break
+      }
+      up = list[u].parent
+      hops++
+    }
+  }
+
   var rows = []
   var lastWorkspace = null
   for (i = 0; i < list.length; i++) {
@@ -145,11 +183,13 @@ function buildRows(entries, filterText) {
       lastWorkspace = wsKey
     }
     var isHint = entry.type === "hint"
+    var isHost = (entry.type === "window" || entry.type === "group_tab")
+                 && hosts[String(entry.id)] === true
     var status = oneLine(entry.agent_status)
     if (status === "unknown")
       status = ""
     rows.push({
-      kind: isHint ? "hint" : "entry",
+      kind: isHint ? "hint" : isHost ? "host" : "entry",
       src: i,
       rowId: String(entry.id),
       depth: Math.max(0, Number(entry.depth) || 0),
@@ -157,7 +197,7 @@ function buildRows(entries, filterText) {
       detail: oneLine(entry.detail),
       isActive: entry.active === true,
       status: status,
-      selectable: !isHint && !!(entry.target && entry.target.address),
+      selectable: !isHint && !isHost && !!(entry.target && entry.target.address),
       contextOnly: !matched[i]
     })
   }

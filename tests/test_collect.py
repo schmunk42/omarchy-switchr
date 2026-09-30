@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# file generated with AI assistance: Claude Code - 2026-09-30 13:19:02 UTC
+# file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
 """Tests for `switchr.py collect` against anonymised fixtures.
 
 Every subprocess and /proc access is mocked: the tests must pass on a CI
@@ -160,7 +160,7 @@ class TestGroups(CollectCase):
         self.assertEqual(head["sort_key"], [1, 0, -1, -1, -1, -1])
         self.assertEqual(tab["type"], "group_tab")
         self.assertEqual(tab["parent"], "win:0x56367ab0aed0")
-        self.assertEqual(tab["depth"], 1)
+        self.assertEqual(tab["depth"], 0)
         self.assertEqual(tab["sort_key"], [1, 0, 0, -1, -1, -1])
 
     def test_group_tab_is_never_active(self):
