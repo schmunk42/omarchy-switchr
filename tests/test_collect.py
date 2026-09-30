@@ -208,8 +208,44 @@ class TestHerdr(CollectCase):
         self.assertTrue(self.by_id["hpane:Earth:w3:p7"]["active"])
         self.assertEqual(pane["sort_key"], win["sort_key"][:3] + [2, 5, 1])
         self.assertEqual(pane["target"]["herdr"]["pane_id"], "w3:p9")
+        # the two-pane tab keeps exactly its two pane rows
+        children = [e["id"] for e in doc["entries"] if e["parent"] == tab["id"]]
+        self.assertEqual(children, ["hpane:Earth:w3:p7", "hpane:Earth:w3:p9"])
+
+    def test_single_pane_tab_is_one_entry(self):
+        doc, _ = self.run_collect()
+        win = self.by_id["win:" + HERDR_ADDRESS]
         single = self.by_id["htab:Earth:w1:t8"]
-        self.assertEqual(single["detail"], "idle · 1 pane · /home/user/Work/project-docs")
+        self.assertEqual(single["type"], "herdr_tab")
+        self.assertEqual(single["parent"], win["id"])
+        self.assertEqual(single["depth"], 1)
+        self.assertEqual(single["label"], "✳ Claude session w1:p8")
+        self.assertEqual(single["title"], "✳ Claude session w1:p8")
+        self.assertEqual(single["detail"],
+                         "docs › 1 · /home/user/Work/project-docs · claude · idle")
+        self.assertNotIn("pane", single["detail"].split(" · ")[1:])
+        self.assertEqual(single["cwd"], "/home/user/Work/project-docs")
+        self.assertEqual(single["agent"], "claude")
+        self.assertEqual(single["agent_status"], "idle")
+        self.assertEqual(single["sort_key"], win["sort_key"][:3] + [1, 8, -1])
+        self.assertEqual(single["target"], {"address": HERDR_ADDRESS, "herdr": {
+            "session": "Earth", "socket": SOCK, "workspace_id": "w1",
+            "tab_id": "w1:t8", "pane_id": "w1:p8"}})
+        self.assertNotIn("hpane:Earth:w1:p8", self.by_id)
+        self.assertEqual([e for e in doc["entries"] if e["parent"] == single["id"]], [])
+
+    def test_only_multi_pane_tabs_have_pane_rows(self):
+        doc, _ = self.run_collect()
+        panes = [e for e in doc["entries"] if e["type"] == "herdr_pane"]
+        self.assertEqual({e["parent"] for e in panes}, {"htab:Earth:w3:t5"})
+        self.assertEqual(len([e for e in doc["entries"] if e["type"] == "herdr_tab"]), 6)
+
+    def test_single_pane_tab_without_agent_omits_null_parts(self):
+        self.run_collect()
+        plain = self.by_id["htab:Earth:w3:t9"]
+        self.assertEqual(plain["label"], "user@host:~/Work/project-docs")
+        self.assertEqual(plain["detail"], "ui › 3 · /home/user/Work/project-docs · unknown")
+        self.assertIsNone(plain["agent"])
 
     def test_herdr_env_has_no_herdr_variables(self):
         with mock.patch.dict(os.environ, {"HERDR_ENV": "1", "HERDR_PANE_ID": "w1:p1"}):

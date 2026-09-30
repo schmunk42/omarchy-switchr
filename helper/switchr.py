@@ -56,11 +56,19 @@ An Entry:
                                      ONE per group, namely the visible tab.
                           group_tab  the other tabs of a group, in the order
                                      of the group bar.
-                          herdr_tab  a tab of a herdr session.
-                          herdr_pane a pane in it.
+                          herdr_tab  a tab of a herdr session. A tab with
+                                     exactly one pane is a single entry that
+                                     already carries that pane (label, title,
+                                     cwd, agent, pane_id); it has no
+                                     herdr_pane child.
+                          herdr_pane a pane of a tab with two or more panes,
+                                     one per pane below its herdr_tab.
                           hint       a notice instead of content ("tabs not
-                                     available", timeout, error). Selectable;
-                                     the jump target is the parent's window.
+                                     available", timeout, error). Informational
+                                     only, not a jump target, although
+                                     target.address is set (the parent's
+                                     window); the overlay does not make it
+                                     selectable.
     parent      string|null  id of the parent entry; null for window.
     depth       int     Indentation depth: window 0, group_tab 1, herdr_tab
                         one level below its window, herdr_pane one below its
@@ -91,15 +99,22 @@ An Entry:
                           title    string  long name (see below)
                           special  bool    true for special:*
     monitor     string|null  Name of the monitor (e.g. "DP-2"), if known.
-    label       string  Main line: window title; for herdr_tab
-                        "<herdr workspace> › <tab>", for herdr_pane the
+    label       string  Main line: window title; for herdr_tab with two or
+                        more panes "<herdr workspace> › <tab>", for a
+                        single-pane herdr_tab and for herdr_pane the
                         terminal title (emojis such as ✳/◐ are kept), for
                         hint the notice text. Tab, line feed and CR are
                         replaced by spaces.
-    detail      string  Secondary line, already composed for reading, e.g.
-                        "foot · ~/Work/project · herdr Earth".
+    detail      string  Secondary line, already composed for reading, parts
+                        joined by " · ", null parts left out, e.g.
+                        "foot · ~/Work/project · herdr Earth". herdr_tab with
+                        two or more panes: "<status> · N panes · <cwd>";
+                        single-pane herdr_tab: "<herdr workspace> › <tab> ·
+                        <cwd> · <agent> · <pane status>"; herdr_pane:
+                        "<cwd> · <agent> · <status>".
     class       string|null  Window class (window/group_tab only).
-    title       string|null  Window title or terminal title (cleaned).
+    title       string|null  Window title or terminal title (cleaned); on a
+                        herdr_tab only when it has exactly one pane.
     cwd         string|null  Working directory: for herdr the foreground_cwd
                         of the shown pane, for a terminal without herdr that
                         of the youngest child shell.
@@ -123,8 +138,9 @@ An Entry:
                             pane_id       string|null  e.g. "w2:p7"; on a
                                           herdr_tab the pane shown there
 
-Example (shortened to one window with one herdr tab; the "hint" entry comes
-from a run in which the same window was a herdr --remote session):
+Example (shortened to one window with one single-pane herdr tab, which is
+therefore one entry without a herdr_pane child; the "hint" entry comes from
+a run in which the same window was a herdr --remote session):
 
     {
       "version": 1,
@@ -150,28 +166,11 @@ from a run in which the same window was a herdr --remote session):
           "depth": 1, "sort_key": [7, 0, -1, 1, 5, -1],
           "workspace": {"id": 7, "name": "7", "label": "7",
                         "title": "7", "special": false},
-          "monitor": "DP-2", "label": "project › 2",
-          "detail": "idle · 1 pane · ~/Work/project",
-          "class": null, "title": null,
-          "cwd": "/home/user/Work/project",
-          "agent": "claude", "agent_status": "idle", "active": false,
-          "target": {"address": "0x55afe5bbd340",
-                     "herdr": {"session": "Mars",
-                               "socket": "/home/user/.config/herdr/sessions/Mars/herdr.sock",
-                               "workspace_id": "w2", "tab_id": "w2:t5",
-                               "pane_id": "w2:p7"}}
-        },
-        {
-          "id": "hpane:Mars:w2:p7", "type": "herdr_pane",
-          "parent": "htab:Mars:w2:t5",
-          "depth": 2, "sort_key": [7, 0, -1, 1, 5, 0],
-          "workspace": {"id": 7, "name": "7", "label": "7",
-                        "title": "7", "special": false},
           "monitor": "DP-2", "label": "✳ Claude session",
-          "detail": "~/Work/project · claude · idle",
+          "detail": "project › 2 · ~/Work/project · claude · idle",
           "class": null, "title": "✳ Claude session",
           "cwd": "/home/user/Work/project",
-          "agent": "claude", "agent_status": "idle", "active": true,
+          "agent": "claude", "agent_status": "idle", "active": false,
           "target": {"address": "0x55afe5bbd340",
                      "herdr": {"session": "Mars",
                                "socket": "/home/user/.config/herdr/sessions/Mars/herdr.sock",
@@ -488,6 +487,10 @@ def join_detail(*parts):
     return " · ".join(clean(p) for p in parts if p)
 
 
+def pane_title(pane):
+    return clean(pane.get("terminal_title")) or clean(pane.get("agent")) or pane.get("pane_id")
+
+
 def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
     """Tabs and panes of a session below its window."""
     out = []
@@ -514,15 +517,15 @@ def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
                          panes[0] if panes else None)
         cwd = (shown_obj or {}).get("foreground_cwd") or (shown_obj or {}).get("cwd")
         count = len(panes)
+        tab_path = "{} › {}".format(ws_labels.get(wsid, wsid), clean(tab.get("label")))
         tab_entry = entry(
             id="htab:{}:{}".format(session, tab_id), type="herdr_tab", parent=parent["id"],
             depth=depth,
             sort_key=key_prefix + [ws_numbers.get(wsid, 0), tab.get("number") or 0, -1],
             workspace=ws, monitor=monitor,
-            label="{} › {}".format(ws_labels.get(wsid, wsid), clean(tab.get("label"))),
+            label=tab_path,
             detail=join_detail(tab.get("agent_status"),
-                               "1 pane" if count == 1 else "{} panes".format(count),
-                               short_path(cwd)),
+                               "{} panes".format(count), short_path(cwd)),
             cwd=cwd, agent=(shown_obj or {}).get("agent"),
             agent_status=tab.get("agent_status"),
             active=tab_id == focused_tab,
@@ -530,11 +533,26 @@ def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
                 "session": session, "socket": sock, "workspace_id": wsid,
                 "tab_id": tab_id, "pane_id": shown}},
         )
+        if count == 1:
+            # A tab with exactly one pane is a single row: the pane's title
+            # is the informative line, and a child row would only repeat
+            # the same jump target.
+            pane = panes[0]
+            pcwd = pane.get("foreground_cwd") or pane.get("cwd")
+            title = pane_title(pane)
+            tab_entry.update(
+                label=title, title=title, cwd=pcwd, agent=pane.get("agent"),
+                detail=join_detail(tab_path, short_path(pcwd), pane.get("agent"),
+                                   pane.get("agent_status")),
+            )
+            tab_entry["target"]["herdr"]["pane_id"] = pane.get("pane_id")
+            out.append(tab_entry)
+            continue
         out.append(tab_entry)
         for rank, pane in enumerate(panes):
             pane_id = pane.get("pane_id")
             pcwd = pane.get("foreground_cwd") or pane.get("cwd")
-            title = clean(pane.get("terminal_title")) or clean(pane.get("agent")) or pane_id
+            title = pane_title(pane)
             out.append(entry(
                 id="hpane:{}:{}".format(session, pane_id), type="herdr_pane",
                 parent=tab_entry["id"], depth=depth + 1,
