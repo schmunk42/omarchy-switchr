@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.schmunk42.switchr",
+  "name": "Switchr",
+  "version": "0.1.0",
+  "author": "schmunk42",
+  "license": "MIT",
+  "description": "Task switcher overlay: every window, window-group tab and herdr tab or pane in one filterable tree, grouped by workspace. Type to filter, Enter to jump.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Switchr.qml"
+  }
+}
