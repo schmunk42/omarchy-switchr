@@ -1,0 +1,432 @@
+[
+  {
+    "address": "0x56367a90b220",
+    "mapped": true,
+    "hidden": false,
+    "visible": false,
+    "at": [
+      12,
+      67
+    ],
+    "size": [
+      1576,
+      921
+    ],
+    "workspace": {
+      "id": 1,
+      "name": "1"
+    },
+    "floating": false,
+    "monitor": 0,
+    "class": "chrome-app.example.org__-Default",
+    "title": "Time Tracking",
+    "initialClass": "chrome-app.example.org__-Default",
+    "initialTitle": "Time Tracking",
+    "pid": 1000,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [
+      "0x56367a90b220",
+      "0x56367ab0aed0"
+    ],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 16,
+    "stableId": "18000015"
+  },
+  {
+    "address": "0x56367abaa8c0",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      1612,
+      40
+    ],
+    "size": [
+      1226,
+      1100
+    ],
+    "workspace": {
+      "id": 11,
+      "name": "11"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "signal",
+    "title": "Signal",
+    "initialClass": "signal",
+    "initialTitle": "Signal",
+    "pid": 1100,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 12,
+    "stableId": "18000020"
+  },
+  {
+    "address": "0x56367ac59e30",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      1612,
+      40
+    ],
+    "size": [
+      1357,
+      1100
+    ],
+    "workspace": {
+      "id": 8,
+      "name": "8"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "foot",
+    "title": "user@host: ~/Work/project",
+    "initialClass": "foot",
+    "initialTitle": "foot",
+    "pid": 1200,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*",
+      "terminal*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 11,
+    "stableId": "1800003d"
+  },
+  {
+    "address": "0x56367ac41320",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      2852,
+      40
+    ],
+    "size": [
+      1488,
+      1100
+    ],
+    "workspace": {
+      "id": 11,
+      "name": "11"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "chrome-web.whatsapp.com__-Default",
+    "title": "WhatsApp",
+    "initialClass": "chrome-web.whatsapp.com__-Default",
+    "initialTitle": "WhatsApp",
+    "pid": 1000,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 15,
+    "stableId": "18000027"
+  },
+  {
+    "address": "0x56367ae8c280",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      12,
+      40
+    ],
+    "size": [
+      1576,
+      948
+    ],
+    "workspace": {
+      "id": 2,
+      "name": "2"
+    },
+    "floating": false,
+    "monitor": 0,
+    "class": "chromium",
+    "title": "Example page 1 - Chromium",
+    "initialClass": "chromium",
+    "initialTitle": "Chromium",
+    "pid": 1000,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "chromium-based-browser*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 8,
+    "stableId": "18000064"
+  },
+  {
+    "address": "0x56367ae72e80",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      2983,
+      40
+    ],
+    "size": [
+      1357,
+      1100
+    ],
+    "workspace": {
+      "id": 8,
+      "name": "8"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "chromium",
+    "title": "Example page 2 - Chromium",
+    "initialClass": "chromium",
+    "initialTitle": "Chromium",
+    "pid": 1000,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "chromium-based-browser*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 14,
+    "stableId": "18000055"
+  },
+  {
+    "address": "0x56367a9807a0",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      1612,
+      40
+    ],
+    "size": [
+      2728,
+      1100
+    ],
+    "workspace": {
+      "id": 6,
+      "name": "6"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "foot",
+    "title": "user@host: ~/Work/project",
+    "initialClass": "foot",
+    "initialTitle": "foot",
+    "pid": 1300,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*",
+      "terminal*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 1,
+    "stableId": "1800000f"
+  },
+  {
+    "address": "0x56367b262010",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      15,
+      43
+    ],
+    "size": [
+      1570,
+      942
+    ],
+    "workspace": {
+      "id": -98,
+      "name": "special:docs"
+    },
+    "floating": false,
+    "monitor": 0,
+    "class": "typora",
+    "title": "notes.md - Typora",
+    "initialClass": "typora",
+    "initialTitle": "notes.md - Typora",
+    "pid": 1400,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 9,
+    "stableId": "1800006f"
+  },
+  {
+    "address": "0x56367ab0aed0",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      12,
+      67
+    ],
+    "size": [
+      1576,
+      921
+    ],
+    "workspace": {
+      "id": 1,
+      "name": "1"
+    },
+    "floating": false,
+    "monitor": 0,
+    "class": "chrome-chat.example.org__-Default",
+    "title": "Team Chat",
+    "initialClass": "chrome-chat.example.org__-Default",
+    "initialTitle": "Team Chat",
+    "pid": 1000,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [
+      "0x56367a90b220",
+      "0x56367ab0aed0"
+    ],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 5,
+    "stableId": "18000013"
+  },
+  {
+    "address": "0x56367ad4db80",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      1612,
+      40
+    ],
+    "size": [
+      1357,
+      1100
+    ],
+    "workspace": {
+      "id": 3,
+      "name": "3"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "org.mozilla.Thunderbird",
+    "title": "Inbox - Mozilla Thunderbird",
+    "initialClass": "org.mozilla.Thunderbird",
+    "initialTitle": "Inbox - Mozilla Thunderbird",
+    "pid": 1500,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 7,
+    "stableId": "18000036"
+  },
+  {
+    "address": "0x56367acdfe00",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      2983,
+      40
+    ],
+    "size": [
+      1357,
+      1100
+    ],
+    "workspace": {
+      "id": 3,
+      "name": "3"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "foot",
+    "title": "user@host: ~/Work/project",
+    "initialClass": "foot",
+    "initialTitle": "foot",
+    "pid": 1600,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*",
+      "terminal*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 6,
+    "stableId": "18000025"
+  },
+  {
+    "address": "0x563679e6db10",
+    "mapped": true,
+    "hidden": false,
+    "visible": true,
+    "at": [
+      1612,
+      40
+    ],
+    "size": [
+      1357,
+      1100
+    ],
+    "workspace": {
+      "id": 7,
+      "name": "7"
+    },
+    "floating": false,
+    "monitor": 1,
+    "class": "foot",
+    "title": "user@host: ~/Work/project",
+    "initialClass": "foot",
+    "initialTitle": "foot",
+    "pid": 1700,
+    "xwayland": false,
+    "pinned": false,
+    "fullscreen": 0,
+    "grouped": [],
+    "tags": [
+      "default-opacity*",
+      "terminal*"
+    ],
+    "swallowing": "0x0",
+    "focusHistoryID": 0,
+    "stableId": "18000009"
+  }
+]
