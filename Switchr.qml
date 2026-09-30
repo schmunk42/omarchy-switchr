@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 21:19:59 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 21:45:11 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, in workspace order; each
@@ -84,7 +84,6 @@ Item {
 
   readonly property int entryHeight: Math.max(Style.space(40), Style.font.title + Style.font.caption + Style.spacing.md * 2 + Style.spacing.xxs)
   readonly property int hintHeight: Style.font.bodySmall + Style.spacing.md * 2
-  readonly property int hostHeight: Style.font.title + Style.spacing.sm * 2
   readonly property int indentStep: Style.space(18)
 
   // Workspace badge, in the style of the bar's workspace badges: tinted
@@ -96,7 +95,8 @@ Item {
   readonly property int badgeInset: Style.spacing.xxs
   readonly property int badgeColumn: root.entryHeight - root.badgeInset * 2
   readonly property int badgeLeft: Style.spacing.xs
-  readonly property int textLeft: root.badgeLeft + root.badgeColumn + Style.spacing.md
+  // Two `md` steps between badge and text, for every row kind.
+  readonly property int textLeft: root.badgeLeft + root.badgeColumn + Style.spacing.md * 2
   readonly property real badgeFillAlpha: 0.35
   readonly property real badgeRingAlpha: 0.7
   readonly property real badgeNeutralAlpha: 0.12
@@ -484,32 +484,28 @@ Item {
               required property bool contextOnly
               required property string wsLabel
               required property string wsColor
+              required property bool showBadge
 
               readonly property bool hasCursor: row.selectable && row.index === root.selectedIndex
               // Rows are flush; only herdr panes carry one step (see
               // SwitchrModel.buildRows). `depth` is not used for layout.
               readonly property int indentX: row.indent * root.indentStep
-              // "host": a terminal window whose herdr tabs are listed below
-              // it. Drawn as a bold text-only line at entry-label size; it
-              // is not selectable (see
-              // SwitchrModel.herdrHosts).
-              readonly property bool isHost: row.kind === "host"
               // Workspace colour of the badge; "" when the helper had none.
               readonly property bool hasWsColor: row.wsColor !== ""
               readonly property color wsTint: row.hasWsColor ? row.wsColor : root.foreground
 
               width: ListView.view.width
-              height: row.kind === "hint" ? root.hintHeight
-                      : row.isHost ? root.hostHeight
-                      : root.entryHeight
+              height: row.kind === "hint" ? root.hintHeight : root.entryHeight
               radius: root.cornerRadius
               color: row.hasCursor ? root.selectedBackground : "transparent"
 
               // Workspace badge (see root.badge*). Without a workspace colour
               // the fill is the muted foreground at low alpha and the label
-              // is drawn in the foreground colour.
+              // is drawn in the foreground colour. Hint rows have none
+              // (`showBadge`); their text still starts at root.textLeft.
               Rectangle {
                 id: wsBadge
+                visible: row.showBadge
                 readonly property int side: Math.max(0, row.height - root.badgeInset * 2)
                 x: root.badgeLeft + Math.round((root.badgeColumn - side) / 2)
                 anchors.verticalCenter: parent.verticalCenter
@@ -528,12 +524,12 @@ Item {
                   horizontalAlignment: Text.AlignHCenter
                   textFormat: Text.PlainText
                   text: row.wsLabel
-                  color: row.hasWsColor
-                         ? Model.badgeInk(row.wsColor, root.badgeFillAlpha, root.background)
-                         : root.foreground
+                  // The workspace colour itself at full alpha, like the
+                  // ring; without one the foreground at 0.7.
+                  color: row.wsTint
                   opacity: row.hasWsColor ? 1 : 0.7
                   font.family: root.fontFamily
-                  font.pixelSize: Math.min(Style.font.bodySmall, Math.max(6, Math.round(wsBadge.side * 0.55)))
+                  font.pixelSize: Math.min(Style.font.title, Math.max(6, Math.round(wsBadge.side * 0.7)))
                   font.bold: true
                   elide: Text.ElideRight
                   maximumLineCount: 1
@@ -555,27 +551,6 @@ Item {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 font.italic: true
-                elide: Text.ElideRight
-                maximumLineCount: 1
-              }
-
-              // Host: the window title as one line at entry-label size, bold,
-              // muted (same tone as an entry's detail line), nothing else --
-              // no detail, status or background.
-              Text {
-                visible: row.isHost
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: root.textLeft
-                anchors.rightMargin: Style.spacing.rowPaddingX
-                anchors.verticalCenter: parent.verticalCenter
-                textFormat: Text.PlainText
-                text: row.isHost ? row.main : ""
-                color: root.foreground
-                opacity: 0.6
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.title
-                font.bold: true
                 elide: Text.ElideRight
                 maximumLineCount: 1
               }

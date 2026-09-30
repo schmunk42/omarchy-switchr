@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 21:19:36 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 21:44:58 UTC
 //
 // Pure functions that turn a Format Version 1 document from
 // helper/switchr.py into the flat row list the overlay draws. No QML
@@ -83,37 +83,12 @@ function workspaceBadge(entry) {
   return { wsLabel: label, wsColor: color }
 }
 
-function srgbChannel(v) {
-  return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
-}
-
-function relLum(r, g, b) {
-  return 0.2126 * srgbChannel(r) + 0.7152 * srgbChannel(g) + 0.0722 * srgbChannel(b)
-}
-
-// Text colour for a badge: `hex` at `alpha` composited over `bg` (anything
-// with r/g/b in 0..1, e.g. a QML color), then black or white, whichever has
-// the higher WCAG contrast against the result. Ties go to white.
-function badgeInk(hex, alpha, bg) {
-  if (!HEX_RE.test(String(hex)))
-    return ""
-  var n = parseInt(String(hex).slice(1), 16)
-  var a = Math.max(0, Math.min(1, Number(alpha)))
-  var br = bg ? Number(bg.r) : 0, bgg = bg ? Number(bg.g) : 0, bb = bg ? Number(bg.b) : 0
-  var r = ((n >> 16) & 255) / 255 * a + br * (1 - a)
-  var g = ((n >> 8) & 255) / 255 * a + bgg * (1 - a)
-  var b = (n & 255) / 255 * a + bb * (1 - a)
-  var l = relLum(r, g, b)
-  var onWhite = 1.05 / (l + 0.05)
-  var onBlack = (l + 0.05) / 0.05
-  return onWhite >= onBlack ? "#ffffff" : "#000000"
-}
-
 // A terminal window (window or group_tab) that hosts a listed herdr
 // session: at least one herdr_tab names it as parent. Its tabs are the jump
-// targets, so the window itself becomes a non-selectable "host" row. A
-// window whose only child is a hint (herdr --remote, timeout) is not a host
-// and stays selectable -- it is the only way to reach that window.
+// targets and stand on their own, so the window itself produces no row at
+// all. A window whose only child is a hint (herdr --remote, timeout) is not
+// a host and stays listed and selectable -- it is the only way to reach
+// that window.
 function herdrHosts(list) {
   var hosts = {}
   for (var i = 0; i < list.length; i++) {
@@ -124,10 +99,38 @@ function herdrHosts(list) {
   return hosts
 }
 
+// The text a filter sees for entry `i`: its own label, detail and cwd, plus
+// those of every host window above it. The host has no row of its own, so
+// typing its title or session name (e.g. "herdr Sonne") shows its tabs as
+// real matches instead of nothing.
+function withHostText(list, i, indexById, hosts) {
+  var entry = list[i]
+  var extra = []
+  var up = entry.parent
+  var hops = 0
+  while (up !== null && up !== undefined && hops < 64) {
+    var u = indexById[String(up)]
+    if (u === undefined)
+      break
+    if (hosts[String(list[u].id)] === true)
+      extra.push(oneLine(list[u].label), oneLine(list[u].detail), oneLine(list[u].cwd))
+    up = list[u].parent
+    hops++
+  }
+  if (extra.length === 0)
+    return entry
+  return {
+    label: entry.label,
+    detail: oneLine(entry.detail) + " " + extra.join(" "),
+    cwd: entry.cwd
+  }
+}
+
 // Builds the rows for the current filter. `entries` is already in display
 // order and is never re-sorted here. A matching child keeps its ancestors
-// visible (marked as `contextOnly`). There are no header rows: every row
-// carries its workspace badge (`wsLabel`, `wsColor`) instead.
+// visible (marked as `contextOnly`); a host window among those ancestors is
+// still not drawn. There are no header rows: every row except a hint
+// carries its workspace badge (`wsLabel`, `wsColor`, `showBadge`) instead.
 function buildRows(entries, filterText) {
   var terms = splitTerms(filterText)
   var list = Array.isArray(entries) ? entries : []
@@ -147,7 +150,7 @@ function buildRows(entries, filterText) {
   }
 
   for (i = 0; i < list.length; i++) {
-    if (!list[i] || !matches(list[i], terms))
+    if (!list[i] || !matches(withHostText(list, i, indexById, hosts), terms))
       continue
     matched[i] = true
     visible[i] = true
@@ -165,42 +168,23 @@ function buildRows(entries, filterText) {
     }
   }
 
-  // A host row is not a jump target. When the filter matches only the host
-  // itself (its title, or the session name in its detail), its herdr
-  // descendants are shown as context, otherwise the result would contain
-  // no selectable row for that window.
-  for (i = 0; i < list.length; i++) {
-    if (!list[i] || visible[i])
-      continue
-    var up = list[i].parent
-    var hops = 0
-    while (up !== null && up !== undefined && hops < 64) {
-      var u = indexById[String(up)]
-      if (u === undefined)
-        break
-      if (matched[u] && hosts[String(list[u].id)] === true) {
-        visible[i] = true
-        break
-      }
-      up = list[u].parent
-      hops++
-    }
-  }
-
   var rows = []
   for (i = 0; i < list.length; i++) {
     if (!visible[i])
       continue
     var entry = list[i]
+    // Host windows are never listed (see herdrHosts); their tabs follow
+    // directly with their own badges.
+    if ((entry.type === "window" || entry.type === "group_tab")
+        && hosts[String(entry.id)] === true)
+      continue
     var badge = workspaceBadge(entry)
     var isHint = entry.type === "hint"
-    var isHost = (entry.type === "window" || entry.type === "group_tab")
-                 && hosts[String(entry.id)] === true
     var status = oneLine(entry.agent_status)
     if (status === "unknown")
       status = ""
     rows.push({
-      kind: isHint ? "hint" : isHost ? "host" : "entry",
+      kind: isHint ? "hint" : "entry",
       src: i,
       rowId: String(entry.id),
       depth: Math.max(0, Number(entry.depth) || 0),
@@ -212,10 +196,12 @@ function buildRows(entries, filterText) {
       detail: oneLine(entry.detail),
       isActive: entry.active === true,
       status: status,
-      selectable: !isHint && !isHost && !!(entry.target && entry.target.address),
+      selectable: !isHint && !!(entry.target && entry.target.address),
       contextOnly: !matched[i],
       wsLabel: badge.wsLabel,
-      wsColor: badge.wsColor
+      wsColor: badge.wsColor,
+      // A hint is a muted sub-line, not an entry of its own: no badge.
+      showBadge: !isHint
     })
   }
   return rows
