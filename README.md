@@ -1,8 +1,8 @@
-<!-- file generated with AI assistance: Claude Code - 2026-09-30 13:09:46 UTC -->
+<!-- file generated with AI assistance: Claude Code - 2026-09-30 22:07:04 UTC -->
 
 # Switchr
 
-A task switcher overlay for [Omarchy](https://omarchy.org/): every window, every tab of a window group and every herdr tab and pane in one tree, grouped by workspace. Type to filter, press `Enter` to jump — to the window, and inside herdr straight to the tab and pane.
+A task switcher overlay for [Omarchy](https://omarchy.org/): every window, every tab of a window group and every herdr tab and pane in one flat list, each row marked with a badge for its workspace. Type to filter, press `Enter` to jump — to the window, and inside herdr straight to the tab and pane.
 
 ![Screenshot](preview.png)
 
@@ -31,6 +31,10 @@ The overlay opens on the focused monitor and collects a fresh list every time it
 
 ## Usage
 
+Every row is a target: a window, a tab of a window group, a herdr tab or a herdr pane. There are no workspace headers; instead each row carries a square badge at its left edge in the style of the bar's workspace badges — a tinted fill and a thin ring in the workspace colour, with the short workspace label in the middle. Rows of the same workspace repeat the badge. Without a configured colour (and for special workspaces, as a rule) the badge is neutral.
+
+A terminal that hosts a herdr session is not listed itself: its tabs and panes are the targets. A herdr tab with a single pane is one row (the pane title as the main line, `<workspace> › <tab> · cwd · agent · status` below); only the panes of a tab with two or more panes are listed, indented one step under their tab. No other row is indented. The active entry has a bold main line; the agent status of a herdr entry is shown on the right.
+
 | Key | Action |
 |---|---|
 | typing | filter over the main line, the detail line and the working directory; case-insensitive, several space-separated terms must all match |
@@ -42,7 +46,7 @@ The overlay opens on the focused monitor and collects a fresh list every time it
 
 With the mouse: hovering selects, a click jumps, the wheel scrolls. Clicking outside the card closes the overlay.
 
-While filtering, a matching tab or pane keeps its window visible for context (dimmed), and a workspace heading only stays when something below it is visible. Muted italic rows are hints, for example a herdr session whose tabs could not be read; they cannot be activated.
+The filter also sees the title, detail line and working directory of a hidden herdr host, so typing the session name finds its tabs. While filtering, a matching entry keeps its parent visible for context (dimmed) — a pane its tab, a group tab its window — except a herdr host, which is never drawn. Muted italic rows without a badge are hints, for example a herdr session whose tabs could not be read (`herdr --remote`); they cannot be activated. The window above such a hint stays listed and selectable, since it is the only way to reach it.
 
 ## Requirements
 
@@ -62,15 +66,19 @@ The config file is optional.
 {
   "labels": { "6": "3", "special:docs": "D" },
   "names": { "6": "Earth", "special:docs": "Docs" },
+  "colors": { "6": "#3b7fe0" },
   "shellWidgetId": "schmunk42.workspaces"
 }
 ```
 
 | Key | What it does |
 |---|---|
-| `labels` | workspace id or name → short label shown in the heading |
-| `names` | workspace id or name → long title shown next to the label |
-| `shellWidgetId` | id of a bar widget in Omarchy's `shell.json` whose `labels` / `clockNames` are read as defaults (the example uses the author's own workspace widget) |
+| `labels` | workspace id or name → short label shown in the row badge |
+| `names` | workspace id or name → long title (`workspace.title` in the data format) |
+| `colors` | workspace id or name → colour `#rrggbb`, used for the row badges; invalid values are ignored |
+| `shellWidgetId` | id of a bar widget in Omarchy's `shell.json` whose `labels` / `clockNames` / `colors` are read as defaults (the example uses the author's own workspace widget) |
+
+A key is the workspace id as a string (`"6"`), the full name (`"special:docs"`) or the bare name (`"docs"`). Explicit `labels`, `names` and `colors` win over the widget.
 
 ## Data format
 
