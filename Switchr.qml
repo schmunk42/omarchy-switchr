@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 20:14:23 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 20:27:22 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
 // every herdr tab and pane in one filterable tree, grouped by workspace.
@@ -488,10 +488,14 @@ Item {
                       : row.isHost ? root.hostHeight
                       : root.entryHeight
               radius: root.cornerRadius
-              color: row.hasCursor ? root.selectedBackground : "transparent"
+              // The workspace header carries the cursor colour, clearly lighter
+              // (0.2 alpha) -- it marks the section without looking selected.
+              color: row.hasCursor ? root.selectedBackground
+                     : row.kind === "header" ? Qt.rgba(root.selectedBackground.r, root.selectedBackground.g, root.selectedBackground.b, 0.2)
+                     : "transparent"
 
               // Workspace section header: label and title, monitor on the
-              // right.
+              // right. All text muted like the host line (foreground, 0.6).
               Item {
                 visible: row.kind === "header"
                 anchors.fill: parent
@@ -506,7 +510,7 @@ Item {
                   textFormat: Text.PlainText
                   text: row.kind === "header" ? row.detail : ""
                   color: root.foreground
-                  opacity: 0.45
+                  opacity: 0.6
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                 }
@@ -519,7 +523,8 @@ Item {
                   anchors.bottomMargin: Style.spacing.xs
                   textFormat: Text.PlainText
                   text: row.kind === "header" ? row.main : ""
-                  color: root.selectedText
+                  color: root.foreground
+                  opacity: 0.6
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   font.bold: true
