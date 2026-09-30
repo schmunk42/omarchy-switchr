@@ -1,7 +1,8 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 20:27:22 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 21:19:59 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
-// every herdr tab and pane in one filterable tree, grouped by workspace.
+// every herdr tab and pane in one filterable tree, in workspace order; each
+// row carries a workspace badge at its left edge instead of section headers.
 // Opened via a Hyprland binding:
 //
 //     omarchy-shell shell toggle io.github.schmunk42.switchr
@@ -82,10 +83,23 @@ Item {
   readonly property int cardHeight: Math.min(Math.max(Style.space(420), Math.round(panel.height * 0.7)), panel.height - Style.gapsOut * 2)
 
   readonly property int entryHeight: Math.max(Style.space(40), Style.font.title + Style.font.caption + Style.spacing.md * 2 + Style.spacing.xxs)
-  readonly property int sectionHeight: Style.font.bodySmall + Style.spacing.lg * 2
   readonly property int hintHeight: Style.font.bodySmall + Style.spacing.md * 2
   readonly property int hostHeight: Style.font.title + Style.spacing.sm * 2
   readonly property int indentStep: Style.space(18)
+
+  // Workspace badge, in the style of the bar's workspace badges: tinted
+  // fill (the bar's `fillOccupied` 0.35), a 1 px ring in the same colour at
+  // 0.7, the short label centred. Side = row height minus a vertical inset
+  // on both ends, so badges of adjacent rows don't touch. The badge sits
+  // centred in a column as wide as an entry row's badge, so the text of
+  // every row kind starts at the same x regardless of its row height.
+  readonly property int badgeInset: Style.spacing.xxs
+  readonly property int badgeColumn: root.entryHeight - root.badgeInset * 2
+  readonly property int badgeLeft: Style.spacing.xs
+  readonly property int textLeft: root.badgeLeft + root.badgeColumn + Style.spacing.md
+  readonly property real badgeFillAlpha: 0.35
+  readonly property real badgeRingAlpha: 0.7
+  readonly property real badgeNeutralAlpha: 0.12
 
   readonly property string statusText: {
     var parts = []
@@ -194,14 +208,11 @@ Item {
     root.selectedRowId = index >= 0 && index < displayModel.count ? displayModel.get(index).rowId : ""
   }
 
-  // Keeps the selection in view, and with it the workspace header right
-  // above it, so the first row of a section never scrolls in headless.
+  // Keeps the selection in view.
   function revealSelected() {
     var index = root.selectedIndex
     if (index < 0 || index >= displayModel.count)
       return
-    if (index > 0 && displayModel.get(index - 1).kind === "header")
-      resultList.positionViewAtIndex(index - 1, ListView.Contain)
     resultList.positionViewAtIndex(index, ListView.Contain)
   }
 
@@ -471,6 +482,8 @@ Item {
               required property string status
               required property bool selectable
               required property bool contextOnly
+              required property string wsLabel
+              required property string wsColor
 
               readonly property bool hasCursor: row.selectable && row.index === root.selectedIndex
               // Rows are flush; only herdr panes carry one step (see
@@ -481,52 +494,46 @@ Item {
               // is not selectable (see
               // SwitchrModel.herdrHosts).
               readonly property bool isHost: row.kind === "host"
+              // Workspace colour of the badge; "" when the helper had none.
+              readonly property bool hasWsColor: row.wsColor !== ""
+              readonly property color wsTint: row.hasWsColor ? row.wsColor : root.foreground
 
               width: ListView.view.width
-              height: row.kind === "header" ? root.sectionHeight
-                      : row.kind === "hint" ? root.hintHeight
+              height: row.kind === "hint" ? root.hintHeight
                       : row.isHost ? root.hostHeight
                       : root.entryHeight
               radius: root.cornerRadius
-              // The workspace header carries the cursor colour, clearly lighter
-              // (0.2 alpha) -- it marks the section without looking selected.
-              color: row.hasCursor ? root.selectedBackground
-                     : row.kind === "header" ? Qt.rgba(root.selectedBackground.r, root.selectedBackground.g, root.selectedBackground.b, 0.2)
-                     : "transparent"
+              color: row.hasCursor ? root.selectedBackground : "transparent"
 
-              // Workspace section header: label and title, monitor on the
-              // right. All text muted like the host line (foreground, 0.6).
-              Item {
-                visible: row.kind === "header"
-                anchors.fill: parent
-                anchors.leftMargin: Style.spacing.sm
-                anchors.rightMargin: Style.spacing.sm
-
-                Text {
-                  id: monitorText
-                  anchors.right: parent.right
-                  anchors.bottom: parent.bottom
-                  anchors.bottomMargin: Style.spacing.xs
-                  textFormat: Text.PlainText
-                  text: row.kind === "header" ? row.detail : ""
-                  color: root.foreground
-                  opacity: 0.6
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
+              // Workspace badge (see root.badge*). Without a workspace colour
+              // the fill is the muted foreground at low alpha and the label
+              // is drawn in the foreground colour.
+              Rectangle {
+                id: wsBadge
+                readonly property int side: Math.max(0, row.height - root.badgeInset * 2)
+                x: root.badgeLeft + Math.round((root.badgeColumn - side) / 2)
+                anchors.verticalCenter: parent.verticalCenter
+                width: side
+                height: side
+                radius: Math.min(Style.cornerRadius, side / 4)
+                color: Qt.rgba(row.wsTint.r, row.wsTint.g, row.wsTint.b,
+                               row.hasWsColor ? root.badgeFillAlpha : root.badgeNeutralAlpha)
+                border.width: 1
+                border.color: Qt.rgba(row.wsTint.r, row.wsTint.g, row.wsTint.b,
+                                      row.hasWsColor ? root.badgeRingAlpha : root.badgeNeutralAlpha * 2)
 
                 Text {
-                  anchors.left: parent.left
-                  anchors.right: monitorText.left
-                  anchors.rightMargin: Style.spacing.md
-                  anchors.bottom: parent.bottom
-                  anchors.bottomMargin: Style.spacing.xs
+                  anchors.centerIn: parent
+                  width: parent.width - 2
+                  horizontalAlignment: Text.AlignHCenter
                   textFormat: Text.PlainText
-                  text: row.kind === "header" ? row.main : ""
-                  color: root.foreground
-                  opacity: 0.6
+                  text: row.wsLabel
+                  color: row.hasWsColor
+                         ? Model.badgeInk(row.wsColor, root.badgeFillAlpha, root.background)
+                         : root.foreground
+                  opacity: row.hasWsColor ? 1 : 0.7
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
+                  font.pixelSize: Math.min(Style.font.bodySmall, Math.max(6, Math.round(wsBadge.side * 0.55)))
                   font.bold: true
                   elide: Text.ElideRight
                   maximumLineCount: 1
@@ -538,7 +545,7 @@ Item {
                 visible: row.kind === "hint"
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: Style.spacing.rowPaddingX + row.indentX
+                anchors.leftMargin: root.textLeft + row.indentX
                 anchors.rightMargin: Style.spacing.rowPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
@@ -559,7 +566,7 @@ Item {
                 visible: row.isHost
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: Style.spacing.rowPaddingX
+                anchors.leftMargin: root.textLeft
                 anchors.rightMargin: Style.spacing.rowPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
@@ -578,7 +585,7 @@ Item {
               Item {
                 visible: row.kind === "entry"
                 anchors.fill: parent
-                anchors.leftMargin: Style.spacing.rowPaddingX + row.indentX
+                anchors.leftMargin: root.textLeft + row.indentX
                 anchors.rightMargin: Style.spacing.rowPaddingX
 
                 Text {

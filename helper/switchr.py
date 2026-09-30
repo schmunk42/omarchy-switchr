@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# file generated with AI assistance: Claude Code - 2026-09-30 19:16:18 UTC
+# file generated with AI assistance: Claude Code - 2026-09-30 21:18:39 UTC
 """switchr helper -- collect jump targets and jump to one of them.
 
 Two subcommands, both usable without a TTY and without any HERDR_*
@@ -100,6 +100,12 @@ An Entry:
                                            labels" below)
                           title    string  long name (see below)
                           special  bool    true for special:*
+                          color    string|null  workspace colour
+                                           "#rrggbb" (lower case), null
+                                           when none is configured (see
+                                           "Workspace labels" below).
+                                           Additive in Format Version 1:
+                                           a reader must accept its absence.
     monitor     string|null  Name of the monitor (e.g. "DP-2"), if known.
     label       string  Main line: window title; for herdr_tab with two or
                         more panes "<herdr workspace> › <tab>", for a
@@ -154,7 +160,8 @@ a run in which the same window was a herdr --remote session):
           "id": "win:0x55afe5bbd340", "type": "window", "parent": null,
           "depth": 0, "sort_key": [7, 0, -1, -1, -1, -1],
           "workspace": {"id": 7, "name": "7", "label": "7",
-                        "title": "7", "special": false},
+                        "title": "7", "special": false,
+                        "color": "#b35e4d"},
           "monitor": "DP-2", "label": "host: project",
           "detail": "foot · ~/Work/project · herdr Mars",
           "class": "foot", "title": "host: project",
@@ -167,7 +174,8 @@ a run in which the same window was a herdr --remote session):
           "parent": "win:0x55afe5bbd340",
           "depth": 1, "sort_key": [7, 0, -1, 1, 5, -1],
           "workspace": {"id": 7, "name": "7", "label": "7",
-                        "title": "7", "special": false},
+                        "title": "7", "special": false,
+                        "color": "#b35e4d"},
           "monitor": "DP-2", "label": "✳ Claude session",
           "detail": "project › 2 · ~/Work/project · claude · idle",
           "class": null, "title": "✳ Claude session",
@@ -184,7 +192,8 @@ a run in which the same window was a herdr --remote session):
           "parent": "win:0x55afe5bbd340",
           "depth": 1, "sort_key": [7, 0, -1, 0, 0, 0],
           "workspace": {"id": 7, "name": "7", "label": "7",
-                        "title": "7", "special": false},
+                        "title": "7", "special": false,
+                        "color": "#b35e4d"},
           "monitor": "DP-2",
           "label": "Tabs not available (herdr --remote build-host)",
           "detail": "Hint · host: project",
@@ -211,12 +220,16 @@ $XDG_CONFIG_HOME/schmunk42-switchr/config.json may set:
 
     labels         {key: short label}
     names          {key: long title}
-    shellWidgetId  string -- take `labels` and `clockNames` from the widget
-                   with this `id` anywhere in $XDG_CONFIG_HOME/omarchy/shell.json
+    colors         {key: "#rrggbb"}
+    shellWidgetId  string -- take `labels`, `clockNames` and `colors` from
+                   the widget with this `id` anywhere in
+                   $XDG_CONFIG_HOME/omarchy/shell.json
 
 A key is the workspace id as a string ("6", "-98"), the full name
 ("special:docs") or the name without the special prefix ("docs"). Explicit
-`labels`/`names` win over the widget. A missing config file is silent; a
+`labels`/`names`/`colors` win over the widget. `color` is null for a
+workspace without an entry (the specials, as a rule) and for a value that
+is not of the form "#rrggbb". A missing config file is silent; a
 malformed one, or a configured widget that cannot be found, is reported
 under `errors`.
 
@@ -363,22 +376,22 @@ def find_widget(node, widget_id):
 
 
 def load_labels(errors):
-    """Workspace labels and titles as two dicts (key -> string)."""
+    """Workspace labels, titles and colours as three dicts (key -> string)."""
     path = config_path()
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError:
-        return {}, {}  # no config is the normal case
+        return {}, {}, {}  # no config is the normal case
     try:
         config = json.loads(raw)
     except json.JSONDecodeError as err:
         errors.append("{} is not valid JSON ({}), workspace labels ignored".format(path, err))
-        return {}, {}
+        return {}, {}, {}
     if not isinstance(config, dict):
         errors.append("{} is not a JSON object, workspace labels ignored".format(path))
-        return {}, {}
+        return {}, {}, {}
 
-    labels, names = {}, {}
+    labels, names, colors = {}, {}, {}
     widget_id = config.get("shellWidgetId")
     if widget_id is not None:
         if not isinstance(widget_id, str) or not widget_id:
@@ -399,8 +412,10 @@ def load_labels(errors):
                     labels.update(widget["labels"])
                 if isinstance(widget.get("clockNames"), dict):
                     names.update(widget["clockNames"])
+                if isinstance(widget.get("colors"), dict):
+                    colors.update(widget["colors"])
 
-    for field, target in (("labels", labels), ("names", names)):
+    for field, target in (("labels", labels), ("names", names), ("colors", colors)):
         value = config.get(field)
         if value is None:
             continue
@@ -408,7 +423,7 @@ def load_labels(errors):
             errors.append("{}: {} must be an object".format(path, field))
             continue
         target.update(value)
-    return labels, names
+    return labels, names, colors
 
 
 def lookup(mapping, wid, name):
@@ -423,7 +438,18 @@ def lookup(mapping, wid, name):
     return None
 
 
-def workspace_info(ws, labels, names):
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def workspace_color(colors, wid, name):
+    """The configured colour as "#rrggbb", or None."""
+    value = lookup(colors, wid, name)
+    if value is None or not COLOR_RE.match(value.strip()):
+        return None
+    return value.strip().lower()
+
+
+def workspace_info(ws, labels, names, colors=None):
     wid = ws.get("id")
     name = str(ws.get("name") or wid)
     special = name.startswith("special:")
@@ -436,7 +462,7 @@ def workspace_info(ws, labels, names):
     label = lookup(labels, wid, name) or default_label
     title = lookup(names, wid, name) or default_title
     return {"id": wid, "name": name, "label": clean(label), "title": clean(title),
-            "special": special}
+            "special": special, "color": workspace_color(colors or {}, wid, name)}
 
 
 def workspace_rank(ws):
@@ -613,7 +639,7 @@ def collect():
     active = hyprctl("activewindow")
     active_address = active.get("address") if isinstance(active, dict) else None
 
-    labels, names = load_labels(errors)
+    labels, names, colors = load_labels(errors)
 
     clients = [c for c in clients if isinstance(c, dict) and c.get("mapped", True)
                and str(c.get("address") or "").startswith("0x")]
@@ -651,7 +677,7 @@ def collect():
         wrank = workspace_rank(ws_obj)
         wpos = ws_seen.get(wrank, 0)
         ws_seen[wrank] = wpos + 1
-        ws = workspace_info(ws_obj, labels, names)
+        ws = workspace_info(ws_obj, labels, names, colors)
         monitor = monitor_names.get(head.get("monitor"))
 
         def window_entry(c, etype, parent, depth, key, ws=ws, monitor=monitor):

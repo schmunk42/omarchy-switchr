@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# file generated with AI assistance: Claude Code - 2026-09-30 13:17:28 UTC
-"""Tests for workspace label resolution (defaults, config file, shell widget)."""
+# file generated with AI assistance: Claude Code - 2026-09-30 21:18:56 UTC
+"""Tests for workspace label and colour resolution (defaults, config file, shell widget)."""
 
 import json
 import os
@@ -34,8 +34,8 @@ class LabelCase(unittest.TestCase):
 
     def resolve(self, ws):
         errors = []
-        labels, names = switchr.load_labels(errors)
-        info = switchr.workspace_info(ws, labels, names)
+        labels, names, colors = switchr.load_labels(errors)
+        info = switchr.workspace_info(ws, labels, names, colors)
         return info, errors
 
 
@@ -44,7 +44,7 @@ class TestDefaults(LabelCase):
     def test_no_config_uses_workspace_name(self):
         info, errors = self.resolve(WS6)
         self.assertEqual(info, {"id": 6, "name": "6", "label": "6", "title": "6",
-                                "special": False})
+                                "special": False, "color": None})
         self.assertEqual(errors, [])
 
     def test_specials_get_first_letter_and_capitalised_name(self):
@@ -56,6 +56,11 @@ class TestDefaults(LabelCase):
     def test_named_workspace_keeps_its_name(self):
         info, _ = self.resolve({"id": 12, "name": "mail"})
         self.assertEqual((info["label"], info["title"]), ("mail", "mail"))
+
+    def test_no_color_without_config(self):
+        for ws in (WS6, DOCS, SCRATCH):
+            info, _ = self.resolve(ws)
+            self.assertIsNone(info["color"])
 
 
 class TestConfig(LabelCase):
@@ -89,6 +94,31 @@ class TestConfig(LabelCase):
         self.assertEqual(info["label"], "6")
         self.assertEqual(len(errors), 2)
 
+    def test_colors_by_id_name_and_bare_name(self):
+        self.write("schmunk42-switchr/config.json", {
+            "colors": {"6": "#3B7FE0", "docs": "#aabbcc"},
+        })
+        info, errors = self.resolve(WS6)
+        self.assertEqual(info["color"], "#3b7fe0")
+        info, _ = self.resolve(DOCS)
+        self.assertEqual(info["color"], "#aabbcc")
+        info, _ = self.resolve(SCRATCH)
+        self.assertIsNone(info["color"])
+        self.assertEqual(errors, [])
+
+    def test_invalid_color_becomes_null(self):
+        self.write("schmunk42-switchr/config.json", {"colors": {"6": "blue", "7": "#12345"}})
+        info, _ = self.resolve(WS6)
+        self.assertIsNone(info["color"])
+        info, _ = self.resolve({"id": 7, "name": "7"})
+        self.assertIsNone(info["color"])
+
+    def test_colors_must_be_an_object(self):
+        self.write("schmunk42-switchr/config.json", {"colors": ["#3b7fe0"]})
+        info, errors = self.resolve(WS6)
+        self.assertIsNone(info["color"])
+        self.assertEqual(len(errors), 1)
+
     def test_config_values_are_cleaned(self):
         self.write("schmunk42-switchr/config.json", {"names": {"6": "Ea\trth\n"}})
         info, _ = self.resolve(WS6)
@@ -100,7 +130,8 @@ class TestShellWidget(LabelCase):
     SHELL = {"bar": {"layout": {"left": [
         {"id": "omarchy.clock"},
         {"id": "example.workspaces", "labels": {"6": "3", "7": "4"},
-         "clockNames": {"6": "Earth", "7": "Mars"}},
+         "clockNames": {"6": "Earth", "7": "Mars"},
+         "colors": {"6": "#3b7fe0", "7": "#b35e4d"}},
     ]}}}
 
     def test_widget_labels_and_clock_names(self):
@@ -116,6 +147,24 @@ class TestShellWidget(LabelCase):
             "shellWidgetId": "example.workspaces", "names": {"6": "Terra"}})
         info, _ = self.resolve(WS6)
         self.assertEqual((info["label"], info["title"]), ("3", "Terra"))
+
+    def test_widget_colors(self):
+        self.write("omarchy/shell.json", self.SHELL)
+        self.write("schmunk42-switchr/config.json", {"shellWidgetId": "example.workspaces"})
+        info, errors = self.resolve(WS6)
+        self.assertEqual(info["color"], "#3b7fe0")
+        info, _ = self.resolve(DOCS)
+        self.assertIsNone(info["color"])
+        self.assertEqual(errors, [])
+
+    def test_explicit_colors_win_over_widget(self):
+        self.write("omarchy/shell.json", self.SHELL)
+        self.write("schmunk42-switchr/config.json", {
+            "shellWidgetId": "example.workspaces", "colors": {"6": "#000000"}})
+        info, _ = self.resolve(WS6)
+        self.assertEqual(info["color"], "#000000")
+        info, _ = self.resolve({"id": 7, "name": "7"})
+        self.assertEqual(info["color"], "#b35e4d")
 
     def test_missing_widget_is_reported(self):
         self.write("omarchy/shell.json", self.SHELL)
@@ -135,6 +184,7 @@ class TestShellWidget(LabelCase):
         self.write("omarchy/shell.json", self.SHELL)
         info, errors = self.resolve(WS6)
         self.assertEqual(info["label"], "6")
+        self.assertIsNone(info["color"])
         self.assertEqual(errors, [])
 
 

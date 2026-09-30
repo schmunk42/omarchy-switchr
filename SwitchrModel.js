@@ -1,4 +1,4 @@
-// file generated with AI assistance: Claude Code - 2026-09-30 19:42:57 UTC
+// file generated with AI assistance: Claude Code - 2026-09-30 21:19:36 UTC
 //
 // Pure functions that turn a Format Version 1 document from
 // helper/switchr.py into the flat row list the overlay draws. No QML
@@ -70,28 +70,43 @@ function matches(entry, terms) {
   return true
 }
 
-function workspaceKey(entry) {
+// The workspace badge every row carries at its left edge (there are no
+// section headers; the badge is the only workspace cue). `wsColor` is the
+// helper's `workspace.color` ("#rrggbb") or "" when it is null -- a
+// ListModel role must not switch between string and null.
+var HEX_RE = /^#[0-9a-fA-F]{6}$/
+
+function workspaceBadge(entry) {
   var ws = entry.workspace || {}
-  return String(ws.id !== undefined && ws.id !== null ? ws.id : ws.name)
+  var label = oneLine(ws.label) || oneLine(ws.name)
+  var color = typeof ws.color === "string" && HEX_RE.test(ws.color) ? ws.color.toLowerCase() : ""
+  return { wsLabel: label, wsColor: color }
 }
 
-function headerRow(entry) {
-  var ws = entry.workspace || {}
-  var label = oneLine(ws.label)
-  var title = oneLine(ws.title)
-  return {
-    kind: "header",
-    src: -1,
-    rowId: "ws:" + workspaceKey(entry),
-    depth: 0,
-    indent: 0,
-    main: label !== "" && title !== "" ? label + "  " + title : (label || title || oneLine(ws.name)),
-    detail: oneLine(entry.monitor),
-    isActive: false,
-    status: "",
-    selectable: false,
-    contextOnly: false
-  }
+function srgbChannel(v) {
+  return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+}
+
+function relLum(r, g, b) {
+  return 0.2126 * srgbChannel(r) + 0.7152 * srgbChannel(g) + 0.0722 * srgbChannel(b)
+}
+
+// Text colour for a badge: `hex` at `alpha` composited over `bg` (anything
+// with r/g/b in 0..1, e.g. a QML color), then black or white, whichever has
+// the higher WCAG contrast against the result. Ties go to white.
+function badgeInk(hex, alpha, bg) {
+  if (!HEX_RE.test(String(hex)))
+    return ""
+  var n = parseInt(String(hex).slice(1), 16)
+  var a = Math.max(0, Math.min(1, Number(alpha)))
+  var br = bg ? Number(bg.r) : 0, bgg = bg ? Number(bg.g) : 0, bb = bg ? Number(bg.b) : 0
+  var r = ((n >> 16) & 255) / 255 * a + br * (1 - a)
+  var g = ((n >> 8) & 255) / 255 * a + bgg * (1 - a)
+  var b = (n & 255) / 255 * a + bb * (1 - a)
+  var l = relLum(r, g, b)
+  var onWhite = 1.05 / (l + 0.05)
+  var onBlack = (l + 0.05) / 0.05
+  return onWhite >= onBlack ? "#ffffff" : "#000000"
 }
 
 // A terminal window (window or group_tab) that hosts a listed herdr
@@ -111,8 +126,8 @@ function herdrHosts(list) {
 
 // Builds the rows for the current filter. `entries` is already in display
 // order and is never re-sorted here. A matching child keeps its ancestors
-// visible (marked as `contextOnly`), and a workspace header is emitted only in
-// front of a workspace that has at least one visible row.
+// visible (marked as `contextOnly`). There are no header rows: every row
+// carries its workspace badge (`wsLabel`, `wsColor`) instead.
 function buildRows(entries, filterText) {
   var terms = splitTerms(filterText)
   var list = Array.isArray(entries) ? entries : []
@@ -173,16 +188,11 @@ function buildRows(entries, filterText) {
   }
 
   var rows = []
-  var lastWorkspace = null
   for (i = 0; i < list.length; i++) {
     if (!visible[i])
       continue
     var entry = list[i]
-    var wsKey = workspaceKey(entry)
-    if (wsKey !== lastWorkspace) {
-      rows.push(headerRow(entry))
-      lastWorkspace = wsKey
-    }
+    var badge = workspaceBadge(entry)
     var isHint = entry.type === "hint"
     var isHost = (entry.type === "window" || entry.type === "group_tab")
                  && hosts[String(entry.id)] === true
@@ -203,7 +213,9 @@ function buildRows(entries, filterText) {
       isActive: entry.active === true,
       status: status,
       selectable: !isHint && !isHost && !!(entry.target && entry.target.address),
-      contextOnly: !matched[i]
+      contextOnly: !matched[i],
+      wsLabel: badge.wsLabel,
+      wsColor: badge.wsColor
     })
   }
   return rows
