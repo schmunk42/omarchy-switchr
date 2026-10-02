@@ -4,7 +4,8 @@
 
 A task switcher overlay for [Omarchy](https://omarchy.org/): every window, every tab of a window group and every herdr tab and pane in one flat list, each row marked with a badge for its workspace. Type to filter, press `Enter` to jump — to the window, and inside herdr straight to the tab and pane.
 
-![Screenshot](preview.png)
+<img width="2560" height="1600" alt="screenshot-2026-10-02_15-33-39" src="https://github.com/user-attachments/assets/92072d2d-4f3d-4d03-ab21-66d18d1f9eaf" />
+
 
 <!-- TODO: add preview.png -->
 
