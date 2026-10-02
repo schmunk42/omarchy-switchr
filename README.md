@@ -82,7 +82,7 @@ A key is the workspace id as a string (`"6"`), the full name (`"special:docs"`) 
 
 ## Data format
 
-The overlay draws what `helper/switchr.py collect` prints: a JSON document in **Format Version 1**, with the entries already in display order. The authoritative description of every field is the module docstring of `helper/switchr.py`. A jump is `helper/switchr.py jump --address …` plus the herdr target when there is one.
+The overlay draws what `helper/switchr.py collect` prints: a JSON document in **Format Version 1**, with the entries already in display order. The authoritative description of every field is the module docstring of `helper/switchr.py`. A jump is `helper/switchr.py jump --address …` plus the herdr target when there is one. Why things are built this way, and what has been measured, is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Development
 
