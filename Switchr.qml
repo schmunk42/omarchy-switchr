@@ -1,8 +1,9 @@
 // file generated with AI assistance: Claude Code - 2026-09-30 21:45:11 UTC
 //
 // Task switcher overlay: every window, every tab of a window group and
-// every herdr tab and pane in one filterable tree, in workspace order; each
-// row carries a workspace badge at its left edge instead of section headers.
+// every herdr tab and pane in one filterable flat list, in workspace order;
+// each row carries a workspace badge at its left edge instead of section
+// headers.
 // Opened via a Hyprland binding:
 //
 //     omarchy-shell shell toggle io.github.schmunk42.switchr
@@ -44,6 +45,8 @@ Item {
   property var entries: []
   property var sourceErrors: []
   property bool loaded: false
+  // Rows the current filter found (Model.countMatches), shown in the header.
+  property int matchCount: 0
   property bool loading: false
   property bool refreshPending: false
   property string loadError: ""
@@ -182,6 +185,7 @@ Item {
 
   function rebuild() {
     var rows = Model.buildRows(root.entries, root.filterText)
+    root.matchCount = Model.countMatches(rows)
     displayModel.clear()
     for (var i = 0; i < rows.length; i++)
       displayModel.append(rows[i])
@@ -233,13 +237,25 @@ Item {
     }
   }
 
-  // A page at a time; stops at the ends instead of wrapping.
+  function rowHeight(index) {
+    return displayModel.get(index).kind === "hint" ? root.hintHeight : root.entryHeight
+  }
+
+  // A page at a time; stops at the ends instead of wrapping. The page is
+  // measured in pixels over the actual rows, because hint rows are lower
+  // than entries and a fixed row count would drift.
   function page(delta) {
     var count = displayModel.count
     if (count === 0)
       return
-    var perPage = Math.max(1, Math.floor(resultList.height / root.entryHeight))
-    var target = Math.max(0, Math.min(count - 1, (root.selectedIndex < 0 ? 0 : root.selectedIndex) + delta * perPage))
+    var target = root.selectedIndex < 0 ? 0 : root.selectedIndex
+    var used = 0
+    while (target + delta >= 0 && target + delta < count) {
+      used += root.rowHeight(target + delta)
+      if (used > resultList.height)
+        break
+      target += delta
+    }
     for (var i = target; i >= 0 && i < count; i += delta) {
       if (root.isSelectable(i)) { root.moveTo(i); return }
     }
@@ -431,7 +447,7 @@ Item {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: root.loading ? "…" : (root.loaded ? String(root.entries.length) : "")
+            text: root.loading ? "…" : (root.loaded ? String(root.matchCount) : "")
             color: root.foreground
             opacity: 0.5
             font.family: root.fontFamily

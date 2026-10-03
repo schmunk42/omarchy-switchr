@@ -14,13 +14,14 @@
 
 var FORMAT_VERSION = 1
 
-// Tabs, newlines and carriage returns would break a single-line row. The
-// helper already replaces them in `label`, but not every field promises
-// that, and a stray newline must not tear the list apart.
+// Control characters (tab, newline, ESC, ...) and the Unicode line
+// separators would break a single-line row. The helper already replaces
+// them in `label`, but not every field promises that, and a stray newline
+// must not tear the list apart.
 function oneLine(value) {
   if (value === null || value === undefined)
     return ""
-  return String(value).replace(/[\t\r\n]+/g, " ")
+  return String(value).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
 }
 
 // Parses the helper's stdout. Returns {doc} on success, {error} otherwise.
@@ -207,16 +208,30 @@ function buildRows(entries, filterText) {
   return rows
 }
 
-// The argv for a jump, exactly as the helper contract states it.
+// The rows a filter actually found: selectable and not just shown as
+// context for a matching child. This is the number the header shows.
+function countMatches(rows) {
+  var n = 0
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].selectable && !rows[i].contextOnly)
+      n++
+  }
+  return n
+}
+
+// The argv for a jump, exactly as the helper contract states it. Every
+// value goes as `--option=value`: a separate argument starting with "-"
+// (a login shell's title is "-zsh") would be read by argparse as an option
+// and the jump would not happen.
 function jumpCommand(helper, entry) {
   var target = entry.target || {}
-  var argv = ["python3", "-B", helper, "jump", "--address", String(target.address)]
+  var argv = ["python3", "-B", helper, "jump", "--address=" + String(target.address)]
   var herdr = target.herdr
   if (herdr !== null && herdr !== undefined) {
-    argv.push("--herdr-socket", String(herdr.socket), "--tab-id", String(herdr.tab_id))
+    argv.push("--herdr-socket=" + String(herdr.socket), "--tab-id=" + String(herdr.tab_id))
     if (herdr.pane_id !== null && herdr.pane_id !== undefined)
-      argv.push("--pane-id", String(herdr.pane_id))
+      argv.push("--pane-id=" + String(herdr.pane_id))
   }
-  argv.push("--label", oneLine(entry.label))
+  argv.push("--label=" + oneLine(entry.label))
   return argv
 }
