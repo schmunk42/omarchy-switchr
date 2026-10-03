@@ -95,9 +95,12 @@ Run the tests:
 ```bash
 python3 -B -m unittest discover -s tests
 node --test tests/model.test.mjs
+python3 -B -m unittest discover -s tests/integration
 ```
 
-The second line tests `SwitchrModel.js` (row building, filter, jump command) and needs Node 18 or newer; `Switchr.qml` itself is only checked when the shell loads it.
+The first line runs the unit tests of the helper, everything mocked. The second tests `SwitchrModel.js` (row building, filter, jump command) and needs Node 18 or newer. The third runs the real helper as a separate process against stub `hyprctl`, `herdr` and `notify-send` programs, with a real process tree and a real herdr socket. It also covers the whole path from `collect` through the overlay's jump command (built by Node) to `jump`; without `node` that one test is skipped. The integration tests need Linux (`/proc`). `Switchr.qml` itself is only checked when the shell loads it.
+
+CI (`.github/workflows/test.yml`) runs all three, plus `ruff` with the rules in `ruff.toml` and a parse check of the JSON files.
 
 ## License
 
