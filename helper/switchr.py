@@ -18,7 +18,9 @@ variable in the environment (the overlay starts them detached):
         herdr pane (socket API `pane.focus`, when --pane-id is given) or
         tab (`herdr tab focus`, when only --tab-id is given), then focus the
         window. Always exits 0; problems go to notify-send (if available)
-        and stderr. --label is only used in messages.
+        and stderr. --label is only used in messages. The overlay passes
+        every value as `--option=value`, so a label such as "-zsh" is not
+        mistaken for an option.
 
 Exit status of `collect`: 0 as soon as the window list from Hyprland was
 readable -- also when herdr is missing entirely or partly (that shows up as
@@ -111,8 +113,8 @@ An Entry:
                         more panes "<herdr workspace> › <tab>", for a
                         single-pane herdr_tab and for herdr_pane the
                         terminal title (emojis such as ✳/◐ are kept), for
-                        hint the notice text. Tab, line feed and CR are
-                        replaced by spaces.
+                        hint the notice text. Control characters (tab,
+                        line feed, CR, ESC, ...) are replaced by spaces.
     detail      string  Secondary line, already composed for reading, parts
                         joined by " · ", null parts left out, e.g.
                         "foot · ~/Work/project · herdr Earth". herdr_tab with
@@ -131,10 +133,18 @@ An Entry:
                         session; on a herdr_tab: that of the pane shown there.
     agent_status string|null herdr: idle | working | blocked | done | unknown,
                         assigned like `agent`; on a herdr_tab the tab status.
-    active      bool    window: the focused window of the desktop.
-                        group_tab: never (the visible tab is the window
-                        entry). herdr_tab/-pane: the tab focused in herdr,
-                        or the pane shown in its tab.
+    active      bool    Where the keyboard is right now; at most one window
+                        and, below it, at most one herdr row. window: the
+                        focused window of the desktop. group_tab: never
+                        (the visible tab is the window entry).
+                        herdr_tab/-pane: only in the session shown by the
+                        focused window (also when that window is a group
+                        tab), the row of the pane herdr has focused: a
+                        single-pane herdr_tab when its tab is the focused
+                        one, otherwise the herdr_pane of the focused pane --
+                        its multi-pane herdr_tab then stays false. Every
+                        other session, tab and pane is false, including the
+                        shown pane of a tab that is not focused.
     target      object  Jump target:
                           address  string  Hyprland window address "0x…",
                                            always set
@@ -243,7 +253,8 @@ herdr: which session runs in a terminal window is determined by
 `herdr_target()` (helper/herdr_target.py). Per session exactly one call
 `herdr api snapshot` (workspaces, tabs, panes and layouts in one answer),
 all sessions in parallel, each call with a hard timeout, all together
-within SNAPSHOT_BUDGET seconds. When a session is shown in several windows,
+within SNAPSHOT_BUDGET seconds of the start of the collection, but never
+less than SNAPSHOT_FLOOR seconds from the start of the queries. When a session is shown in several windows,
 the window with the lowest `focusHistoryID` gets the tabs; the others show
 none. herdr over `--remote` is not queried (its client socket does not
 answer), a hint "Tabs not available" is shown instead. Stopped sessions do
@@ -274,10 +285,17 @@ import herdr_target as ht  # noqa: E402
 FORMAT_VERSION = 1
 APP = "switchr"
 
-# Overall deadline for all herdr queries together, measured from the start
-# of the collection. Below the budget of the whole collector, so that
-# hyprctl and /proc before it and the JSON output after it still fit.
+# Deadline for all herdr queries together: SNAPSHOT_BUDGET seconds after
+# the start of the collection, but at least SNAPSHOT_FLOOR seconds after the
+# queries start -- otherwise a slow Hyprland eats the budget and every
+# session reports a timeout although herdr is fine.
+#
+# Worst case against the overlay's `timeout -k 2 8`: three hyprctl queries
+# at HYPRCTL_TIMEOUT (4.5 s) + SNAPSHOT_FLOOR (1.0 s) + /proc walks and
+# output (well below 1 s) = about 6 s, below 8.
 SNAPSHOT_BUDGET = 2.5
+SNAPSHOT_FLOOR = 1.0
+HYPRCTL_TIMEOUT = 1.5
 HERDR_TIMEOUT = ht.HERDR_TIMEOUT
 
 # Rank of the special workspaces in `sort_key` (part of Format Version 1).
@@ -290,15 +308,20 @@ ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]+$")
 # Small helpers
 # ---------------------------------------------------------------------------
 
+# C0 controls, DEL and the Unicode line/paragraph separators. Terminal
+# titles carry whatever a program set, ESC sequences included.
+CONTROL_RE = re.compile("[\x00-\x1f\x7f\u2028\u2029]")
+
+
 def clean(text):
-    """Replace tab, line feed and CR by spaces.
+    """Replace control characters (tab, line feed, CR, ESC, ...) by spaces.
 
     Consumers may build tab-separated lines; a tab in a title would shift
     the fields there, a line break would split the entry in two.
     """
     if text is None:
         return ""
-    return str(text).replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
+    return CONTROL_RE.sub(" ", str(text)).strip()
 
 
 def short_path(path):
@@ -310,11 +333,11 @@ def short_path(path):
     return path
 
 
-def hyprctl(command):
+def hyprctl(command, timeout=5):
     """One `hyprctl -j <command>` query as parsed JSON, or None."""
     try:
         proc = subprocess.run(["hyprctl", "-j", command],
-                              capture_output=True, text=True, timeout=5)
+                              capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if proc.returncode != 0:
@@ -495,9 +518,14 @@ def fetch_snapshot(sock, deadline):
         detail = (proc.stderr or proc.stdout or "").strip().splitlines()
         return None, "herdr api snapshot failed: " + (detail[0] if detail else "no message")
     try:
-        return json.loads(proc.stdout)["result"]["snapshot"], None
+        snap = json.loads(proc.stdout)["result"]["snapshot"]
     except (json.JSONDecodeError, KeyError, TypeError):
+        snap = None
+    if not isinstance(snap, dict):
+        # A `null` (or any non-object) would crash collect() further down
+        # and take every other window with it.
         return None, "herdr api snapshot returned nothing readable"
+    return snap, None
 
 
 def entry(**fields):
@@ -520,8 +548,12 @@ def pane_title(pane):
     return clean(pane.get("terminal_title")) or clean(pane.get("agent")) or pane.get("pane_id")
 
 
-def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
-    """Tabs and panes of a session below its window."""
+def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor, focused):
+    """Tabs and panes of a session below its window.
+
+    `focused`: the window showing this session is the focused window; only
+    then does a row of it get `active` (see the format description).
+    """
     out = []
     address = parent["target"]["address"]
     ws_labels = {w.get("workspace_id"): clean(w.get("label")) or str(w.get("number"))
@@ -530,7 +562,7 @@ def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
                   for w in snap.get("workspaces") or []}
     shown_pane = {lay.get("tab_id"): lay.get("focused_pane_id")
                   for lay in snap.get("layouts") or []}
-    focused_tab = snap.get("focused_tab_id")
+    focused_tab = snap.get("focused_tab_id") if focused else None
     panes_by_tab = {}
     for pane in snap.get("panes") or []:
         panes_by_tab.setdefault(pane.get("tab_id"), []).append(pane)
@@ -557,7 +589,8 @@ def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
                                "{} panes".format(count), short_path(cwd)),
             cwd=cwd, agent=(shown_obj or {}).get("agent"),
             agent_status=tab.get("agent_status"),
-            active=tab_id == focused_tab,
+            # A multi-pane tab hands `active` to its focused pane below.
+            active=tab_id == focused_tab and len(panes) == 1,
             target={"address": address, "herdr": {
                 "session": session, "socket": sock, "workspace_id": wsid,
                 "tab_id": tab_id, "pane_id": shown}},
@@ -592,7 +625,7 @@ def herdr_entries(parent, snap, session, sock, depth, key_prefix, ws, monitor):
                                    pane.get("agent_status")),
                 title=title, cwd=pcwd, agent=pane.get("agent"),
                 agent_status=pane.get("agent_status"),
-                active=pane_id == shown,
+                active=tab_id == focused_tab and pane_id == shown,
                 target={"address": address, "herdr": {
                     "session": session, "socket": sock, "workspace_id": wsid,
                     "tab_id": tab_id, "pane_id": pane_id}},
@@ -626,17 +659,17 @@ def collect():
         "entries": [],
     }
 
-    clients = hyprctl("clients")
+    clients = hyprctl("clients", timeout=HYPRCTL_TIMEOUT)
     if not isinstance(clients, list):
         errors.append("hyprctl -j clients not readable")
         return doc, 1
-    monitors = hyprctl("monitors")
+    monitors = hyprctl("monitors", timeout=HYPRCTL_TIMEOUT)
     monitor_names = {}
     if isinstance(monitors, list):
         monitor_names = {m.get("id"): m.get("name") for m in monitors}
     else:
         errors.append("hyprctl -j monitors not readable, monitor names missing")
-    active = hyprctl("activewindow")
+    active = hyprctl("activewindow", timeout=HYPRCTL_TIMEOUT)
     active_address = active.get("address") if isinstance(active, dict) else None
 
     labels, names, colors = load_labels(errors)
@@ -734,7 +767,7 @@ def collect():
         if current is None or fhid(by_address[address]) < fhid(by_address[current]):
             owners[target.sock] = address
 
-    deadline = started + SNAPSHOT_BUDGET
+    deadline = max(started + SNAPSHOT_BUDGET, time.monotonic() + SNAPSHOT_FLOOR)
     snapshots = {}
     if owners:
         # No `with`: its shutdown(wait=True) would wait for a hanging
@@ -779,7 +812,8 @@ def collect():
                                 ent["agent_status"] = pane.get("agent_status")
                         children.extend(herdr_entries(
                             ent, snap, target.session, target.sock, ent["depth"] + 1,
-                            ent["sort_key"][:3], ent["workspace"], ent["monitor"]))
+                            ent["sort_key"][:3], ent["workspace"], ent["monitor"],
+                            focused=client["address"] == active_address))
             herdr_part = None
             if target is not None and target.session:
                 herdr_part = "herdr {}".format(target.session)
@@ -817,27 +851,42 @@ def report(message):
         pass
 
 
+def dispatch(argument):
+    """One `hyprctl dispatch <argument>`; None on `ok`, otherwise the answer."""
+    try:
+        proc = subprocess.run(["hyprctl", "dispatch", argument],
+                              capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired) as err:
+        return "hyprctl not executable: {}".format(err)
+    answer = (proc.stdout or "").strip()
+    if answer == "ok":
+        return None
+    return answer or (proc.stderr or "").strip() or "no answer"
+
+
 def focus_window(address):
     """Focus an address; None on success, otherwise the reason.
 
     Never with an empty address: `address:` without a value answers `ok`
     too and does nothing. hyprctl writes errors to stdout, which is why the
     answer is checked for exactly `ok`.
+
+    First the Lua form of Hyprland's Lua config (tested on 0.56.2), then the
+    legacy `focuswindow` dispatcher for a Hyprland without it. Each form is
+    a syntax error on the other kind of Hyprland, so trying both is
+    harmless; when both fail, the Lua answer is reported, because on a Lua
+    Hyprland it carries the real reason.
     """
     if not address or not ADDRESS_RE.match(address):
         return "no valid window address"
-    try:
-        proc = subprocess.run(
-            ["hyprctl", "dispatch",
-             'hl.dsp.focus({{ window = "address:{}" }})'.format(address)],
-            capture_output=True, text=True, timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired) as err:
-        return "hyprctl not executable: {}".format(err)
-    answer = (proc.stdout or "").strip()
-    if answer == "ok":
+    problem = dispatch('hl.dsp.focus({{ window = "address:{}" }})'.format(address))
+    if problem is None:
         return None
-    return "focus refused: {}".format(answer or (proc.stderr or "").strip() or "no answer")
+    if problem.startswith("hyprctl not executable"):
+        return problem
+    if dispatch("focuswindow address:{}".format(address)) is None:
+        return None
+    return "focus refused: {}".format(problem)
 
 
 def herdr_tab_focus(sock, tab_id):
@@ -858,27 +907,46 @@ def herdr_rpc(sock, method, params):
 
     The way to `pane.focus`: the CLI knows `pane focus` only with
     --direction, and `agent focus` only takes panes running an agent.
+
+    The answer is the first line carrying the request's `id`; any other
+    line (an event, a reply to someone else) is skipped. An error without
+    an id (the JSON-RPC form for "request not understood") counts too. All
+    reads together stay within HERDR_TIMEOUT.
     """
-    request = {"id": "switchr:{}".format(method), "method": method, "params": params}
+    request_id = "switchr:{}".format(method)
+    request = {"id": request_id, "method": method, "params": params}
+    deadline = time.monotonic() + HERDR_TIMEOUT
+    answer = None
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
             conn.settimeout(HERDR_TIMEOUT)
             conn.connect(sock)
             conn.sendall((json.dumps(request) + "\n").encode())
             buf = b""
-            while b"\n" not in buf:
-                chunk = conn.recv(65536)
-                if not chunk:
-                    break
-                buf += chunk
+            while answer is None:
+                while b"\n" not in buf:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return "herdr {}: no answer within {:.1f} s".format(method, HERDR_TIMEOUT)
+                    conn.settimeout(remaining)
+                    chunk = conn.recv(65536)
+                    if not chunk:
+                        return "herdr {}: connection closed without an answer".format(method)
+                    buf += chunk
+                line, buf = buf.split(b"\n", 1)
+                if not line.strip():
+                    continue
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError:
+                    return "herdr {}: unreadable answer".format(method)
+                if not isinstance(message, dict):
+                    return "herdr {}: unreadable answer".format(method)
+                if message.get("id") == request_id or (
+                        message.get("id") is None and "error" in message):
+                    answer = message
     except OSError as err:
         return "herdr {}: {}".format(method, err)
-    try:
-        answer = json.loads(buf.split(b"\n", 1)[0])
-    except json.JSONDecodeError:
-        return "herdr {}: unreadable answer".format(method)
-    if not isinstance(answer, dict):
-        return "herdr {}: unreadable answer".format(method)
     if "error" in answer:
         err = answer["error"] or {}
         if isinstance(err, dict):

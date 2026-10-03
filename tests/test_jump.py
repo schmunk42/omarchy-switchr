@@ -109,6 +109,33 @@ class TestJump(JumpCase):
         self.assertEqual(status, 0)
         self.assertEqual(len(self.notifications()), 1)
         self.assertIn("no such window", err)
+        # both forms were tried, the Lua answer is the one reported
+        self.assertEqual(len(self.dispatches()), 2)
+
+    def test_legacy_dispatcher_as_fallback(self):
+        def run(args, **kwargs):
+            args = list(args)
+            if args[:2] == ["hyprctl", "dispatch"]:
+                self.calls.append((args, kwargs))
+                ok = args[2].startswith("focuswindow ")
+                return completed(args, stdout="ok\n" if ok else "Invalid dispatcher\n")
+            return self.fake_run(args, **kwargs)
+        with mock.patch.object(switchr.subprocess, "run", side_effect=run):
+            status, err = self.main("--address", ADDRESS)
+        self.assertEqual(status, 0)
+        self.assertEqual(err, "")
+        self.assertEqual(self.dispatches()[-1],
+                         ["hyprctl", "dispatch", "focuswindow address:" + ADDRESS])
+
+    def test_label_starting_with_a_dash(self):
+        # the overlay passes --label=VALUE; a title like "-zsh" must not be
+        # read as an option (that used to drop the jump entirely)
+        for label in ("-zsh", "--help"):
+            self.calls.clear()
+            status, err = self.main("--address=" + ADDRESS, "--label=" + label)
+            self.assertEqual(status, 0)
+            self.assertEqual(len(self.dispatches()), 1, label)
+            self.assertEqual(err, "")
 
     def test_notify_send_missing_still_reports_on_stderr(self):
         with mock.patch.object(switchr.shutil, "which", return_value=None):
@@ -172,8 +199,23 @@ class TestHerdrRpc(unittest.TestCase):
         self.assertEqual(sent["params"], {"pane_id": "w1:p1"})
 
     def test_error(self):
-        result, _ = self.run_rpc(b'{"id":"x","error":{"code":"not_found","message":"no pane"}}\n')
+        result, _ = self.run_rpc(
+            b'{"id":"switchr:pane.focus","error":{"code":"not_found","message":"no pane"}}\n')
         self.assertEqual(result, "herdr pane.focus: no pane")
+
+    def test_error_without_id_counts(self):
+        result, _ = self.run_rpc(b'{"id":null,"error":{"message":"parse error"}}\n')
+        self.assertEqual(result, "herdr pane.focus: parse error")
+
+    def test_unrelated_lines_before_the_answer_are_skipped(self):
+        result, _ = self.run_rpc(
+            b'{"event":"pane.updated"}\n{"id":"other","error":{"message":"not mine"}}\n'
+            b'{"id":"switchr:pane.focus","result":{}}\n')
+        self.assertIsNone(result)
+
+    def test_closed_connection_without_answer(self):
+        result, _ = self.run_rpc(b'{"event":"pane.updated"}\n')
+        self.assertEqual(result, "herdr pane.focus: connection closed without an answer")
 
 
 if __name__ == "__main__":
