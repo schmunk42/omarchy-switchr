@@ -31,7 +31,7 @@ The overlay opens on the focused monitor and collects a fresh list every time it
 
 Every row is a target: a window, a tab of a window group, a herdr tab or a herdr pane. There are no workspace headers; instead each row carries a square badge at its left edge in the style of the bar's workspace badges — a tinted fill and a thin ring in the workspace colour, with the short workspace label in the middle. Rows of the same workspace repeat the badge. Without a configured colour (and for special workspaces, as a rule) the badge is neutral.
 
-A terminal that hosts a herdr session is not listed itself: its tabs and panes are the targets. A herdr tab with a single pane is one row (the pane title as the main line, `<workspace> › <tab> · cwd · agent · status` below); only the panes of a tab with two or more panes are listed, indented one step under their tab. No other row is indented. The active entry has a bold main line; the agent status of a herdr entry is shown on the right.
+A terminal that hosts a herdr session is not listed itself: its tabs and panes are the targets. A herdr tab with a single pane is one row (the pane title as the main line, `<workspace> › <tab> · cwd · agent · status` below); only the panes of a tab with two or more panes are listed, indented one step under their tab. No other row is indented. The row where the keyboard is right now has a bold main line: the focused window, or — when that window hosts herdr — the focused tab or pane of its session; panes shown in other tabs or sessions are not marked. The agent status of a herdr entry is shown on the right. The number in the header counts the rows the filter found.
 
 | Key | Action |
 |---|---|
@@ -49,7 +49,7 @@ The filter also sees the title, detail line and working directory of a hidden he
 ## Requirements
 
 - Python 3.11 or newer (`python3`)
-- `hyprctl` (comes with Hyprland)
+- Hyprland with `hyprctl`; tested with 0.56.2 and its Lua config. A jump uses the Lua dispatcher `hl.dsp.focus` and falls back to the legacy `focuswindow` dispatcher on a Hyprland without it.
 - `timeout` from coreutils
 - optional: `herdr` for tabs and panes of herdr sessions
 - optional: `notify-send`
@@ -94,7 +94,13 @@ Run the tests:
 
 ```bash
 python3 -B -m unittest discover -s tests
+node --test tests/model.test.mjs
+python3 -B -m unittest discover -s tests/integration
 ```
+
+The first line runs the unit tests of the helper, everything mocked. The second tests `SwitchrModel.js` (row building, filter, jump command) and needs Node 18 or newer. The third runs the real helper as a separate process against stub `hyprctl`, `herdr` and `notify-send` programs, with a real process tree and a real herdr socket. It also covers the whole path from `collect` through the overlay's jump command (built by Node) to `jump`; without `node` that one test is skipped. The integration tests need Linux (`/proc`). `Switchr.qml` itself is only checked when the shell loads it.
+
+CI (`.github/workflows/test.yml`) runs all three, plus `ruff` with the rules in `ruff.toml` and a parse check of the JSON files.
 
 ## License
 

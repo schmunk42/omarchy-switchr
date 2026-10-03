@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "schmunk42",
   "license": "MIT",
-  "description": "Task switcher overlay: every window, window-group tab and herdr tab or pane in one filterable tree, grouped by workspace. Type to filter, Enter to jump.",
+  "description": "Task switcher overlay: every window, window-group tab and herdr tab or pane in one filterable flat list, with a workspace badge on every row. Type to filter, Enter to jump.",
   "kinds": [
     "overlay"
   ],

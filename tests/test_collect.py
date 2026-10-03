@@ -8,6 +8,7 @@ with one synthetic second pane (w3:p9, with a tab and a newline in its
 title) added to the focused tab, so that a tab with several panes exists.
 """
 
+import json
 import os
 import tempfile
 import threading
@@ -44,10 +45,19 @@ class CollectCase(unittest.TestCase):
         self.runs = []
 
     def default_snapshot_run(self, args, **kwargs):
-        import json
-        return completed(args, stdout=json.dumps(fixture("herdr-snapshot.json")))
+        return completed(args, stdout=json.dumps(self.snapshot_doc()))
 
-    def fake_hyprctl(self, command):
+    def snapshot_doc(self):
+        """The herdr answer; tests change it through `edit_snapshot`."""
+        doc = fixture("herdr-snapshot.json")
+        for edit in getattr(self, "snapshot_edits", []):
+            edit(doc["result"]["snapshot"])
+        return doc
+
+    def edit_snapshot(self, edit):
+        self.snapshot_edits = getattr(self, "snapshot_edits", []) + [edit]
+
+    def fake_hyprctl(self, command, timeout=5):
         if command == "clients":
             return self.clients
         if command == "monitors":
@@ -195,7 +205,8 @@ class TestHerdr(CollectCase):
         self.assertEqual(tab["parent"], win["id"])
         self.assertEqual(tab["depth"], 1)
         self.assertEqual(tab["label"], "ui › three")
-        self.assertTrue(tab["active"])
+        # the window is not the focused one, so nothing of its session is
+        self.assertFalse(tab["active"])
         self.assertEqual(tab["detail"], "working · 2 panes · /home/user/Work/project-docs")
         self.assertEqual(tab["sort_key"], win["sort_key"][:3] + [2, 5, -1])
         self.assertEqual(tab["target"], {"address": HERDR_ADDRESS, "herdr": {
@@ -205,7 +216,7 @@ class TestHerdr(CollectCase):
         self.assertEqual(pane["parent"], tab["id"])
         self.assertEqual(pane["depth"], 2)
         self.assertFalse(pane["active"])
-        self.assertTrue(self.by_id["hpane:Earth:w3:p7"]["active"])
+        self.assertFalse(self.by_id["hpane:Earth:w3:p7"]["active"])
         self.assertEqual(pane["sort_key"], win["sort_key"][:3] + [2, 5, 1])
         self.assertEqual(pane["target"]["herdr"]["pane_id"], "w3:p9")
         # the two-pane tab keeps exactly its two pane rows
@@ -269,6 +280,13 @@ class TestHerdr(CollectCase):
                 value = e[field] or ""
                 self.assertFalse(set(value) & {"\t", "\n", "\r"}, (e["id"], field))
 
+    def test_other_control_characters_are_replaced(self):
+        for c in self.clients:
+            if c["address"] == "0x56367ae8c280":
+                c["title"] = "a\x1b[31mb\x0bc\x7fd\u2028e"
+        self.run_collect()
+        self.assertEqual(self.by_id["win:0x56367ae8c280"]["label"], "a [31mb c d e")
+
     def test_shared_pid_terminals_get_a_hint(self):
         for c in self.clients:
             if c["address"] in ("0x56367ac59e30", ACTIVE_ADDRESS):
@@ -299,6 +317,22 @@ class TestHerdr(CollectCase):
         self.assertEqual(hint["label"], "herdr session Earth: herdr api snapshot failed: boom")
         self.assertIn(hint["label"], doc["errors"])
 
+    def test_null_snapshot_is_a_hint_not_a_crash(self):
+        def null_snapshot(args, **kwargs):
+            return completed(args, stdout='{"id":"x","result":{"snapshot":null}}')
+        self.snapshot_run = null_snapshot
+        doc, status = self.run_collect()
+        self.assertEqual(status, 0)
+        hint = self.by_id["hint:win:" + HERDR_ADDRESS]
+        self.assertEqual(hint["label"],
+                         "herdr session Earth: herdr api snapshot returned nothing readable")
+        self.assertIn("win:0x56367ae8c280", self.by_id)
+
+    def test_non_object_snapshot_is_a_hint(self):
+        self.snapshot_run = lambda args, **kw: completed(args, stdout='{"result":{"snapshot":[]}}')
+        self.run_collect()
+        self.assertIn("nothing readable", self.by_id["hint:win:" + HERDR_ADDRESS]["label"])
+
     def test_session_in_two_windows_lists_tabs_once(self):
         self.targets[1200] = self.targets[HERDR_PID]   # foot on workspace 8, fhid 11
         self.run_collect()
@@ -306,15 +340,71 @@ class TestHerdr(CollectCase):
         self.assertEqual(len(self.runs), 1)
 
 
+class TestActive(CollectCase):
+    """`active` marks where the keyboard is: one window, one herdr row."""
+
+    def active_ids(self, doc):
+        return [e["id"] for e in doc["entries"] if e["active"]]
+
+    def test_only_the_focused_window_without_herdr(self):
+        doc, _ = self.run_collect()
+        self.assertEqual(self.active_ids(doc), ["win:" + ACTIVE_ADDRESS])
+
+    def test_focused_herdr_window_marks_its_focused_pane_only(self):
+        self.active = HERDR_ADDRESS
+        doc, _ = self.run_collect()
+        # w3:t5 has two panes: the pane row carries `active`, not the tab
+        self.assertEqual(self.active_ids(doc),
+                         ["win:" + HERDR_ADDRESS, "hpane:Earth:w3:p7"])
+
+    def test_focused_single_pane_tab_and_unfocused_multi_pane_tabs(self):
+        def edit(snap):
+            snap["focused_tab_id"] = "w1:t8"
+            snap["focused_pane_id"] = "w1:p8"
+            # a second multi-pane tab, not focused, with its own shown pane
+            extra = dict(next(p for p in snap["panes"] if p["pane_id"] == "w3:p5"))
+            extra["pane_id"] = "w3:pE"
+            snap["panes"].append(extra)
+        self.edit_snapshot(edit)
+        self.active = HERDR_ADDRESS
+        doc, _ = self.run_collect()
+        self.assertEqual(self.active_ids(doc),
+                         ["win:" + HERDR_ADDRESS, "htab:Earth:w1:t8"])
+        self.assertFalse(self.by_id["hpane:Earth:w3:p5"]["active"])
+        self.assertFalse(self.by_id["hpane:Earth:w3:p7"]["active"])
+
+    def test_herdr_in_a_focused_group_tab(self):
+        tab_address = "0x56367a90b220"   # the non-visible member of the group
+        for c in self.clients:
+            if c["address"] == tab_address:
+                c["class"] = "foot"
+                c["pid"] = 1800
+        self.targets = {1800: self.targets[HERDR_PID]}
+        self.active = tab_address
+        doc, _ = self.run_collect()
+        self.assertEqual(self.by_id["win:" + tab_address]["type"], "group_tab")
+        self.assertEqual(self.active_ids(doc), ["hpane:Earth:w3:p7"])
+
+
+class TestBudget(unittest.TestCase):
+
+    def test_worst_case_fits_the_overlay_timeout(self):
+        # three hyprctl timeouts + the floor, against `timeout 8` in Switchr.qml
+        self.assertLess(3 * switchr.HYPRCTL_TIMEOUT + switchr.SNAPSHOT_FLOOR, 7)
+        self.assertLessEqual(switchr.SNAPSHOT_FLOOR, switchr.SNAPSHOT_BUDGET)
+
+
 class TestHerdrTimeout(CollectCase):
 
     BUDGET = 0.4
+    FLOOR = 0.3
 
     def setUp(self):
         super().setUp()
-        p = mock.patch.object(switchr, "SNAPSHOT_BUDGET", self.BUDGET)
-        p.start()
-        self.addCleanup(p.stop)
+        for name, value in (("SNAPSHOT_BUDGET", self.BUDGET), ("SNAPSHOT_FLOOR", self.FLOOR)):
+            p = mock.patch.object(switchr, name, value)
+            p.start()
+            self.addCleanup(p.stop)
 
     def test_timeout_honouring_call_stays_within_budget(self):
         def slow(args, **kwargs):
@@ -349,6 +439,22 @@ class TestHerdrTimeout(CollectCase):
                         hint["label"])
         # the rest of the document is intact
         self.assertIn("win:0x56367ae8c280", self.by_id)
+
+    def test_slow_hyprctl_does_not_eat_the_herdr_budget(self):
+        hyprctl = self.fake_hyprctl
+
+        def slow_hyprctl(command, timeout=5):
+            self.assertLessEqual(timeout, switchr.HYPRCTL_TIMEOUT)
+            if command == "activewindow":
+                time.sleep(self.BUDGET + 0.1)   # budget used up before herdr
+            return hyprctl(command)
+        self.fake_hyprctl = slow_hyprctl
+        doc, status = self.run_collect()
+        self.assertEqual(status, 0)
+        self.assertNotIn("hint:win:" + HERDR_ADDRESS, self.by_id)
+        self.assertGreaterEqual(self.runs[0][1]["timeout"], self.FLOOR - 0.05)
+        self.assertIn("htab:Earth:w3:t5", self.by_id)
+
 
 
 if __name__ == "__main__":

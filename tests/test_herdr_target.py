@@ -77,6 +77,34 @@ class TestHerdrTarget(unittest.TestCase):
         self.assertEqual(ht.herdr_target(1),
                          ht.HerdrTarget("remote:build", "/run/c.sock", "build", None))
 
+    def test_session_with_equals_sign(self):
+        path = self.make_socket("sessions", "Earth", "herdr.sock")
+        self.tree({2: ["herdr", "--session=Earth"]})
+        self.assertEqual(ht.herdr_target(1), ht.HerdrTarget("Earth", path, ht.HOSTNAME, None))
+
+    def test_empty_session_value_is_a_problem(self):
+        self.make_socket("herdr.sock")   # a default session must not be guessed
+        self.tree({2: ["herdr", "--session="]})
+        self.assertIn("session name", ht.herdr_target(1).problem)
+
+    def test_remote_with_equals_sign(self):
+        self.make_socket("herdr.sock")
+        self.tree({2: ["herdr", "--remote=build"], 201: ["herdr", "client"]},
+                  {201: {"HERDR_CLIENT_SOCKET_PATH": "/run/c.sock"}})
+        self.assertEqual(ht.herdr_target(1),
+                         ht.HerdrTarget("remote:build", "/run/c.sock", "build", None))
+
+    def test_machine_is_treated_like_remote(self):
+        self.make_socket("herdr.sock")
+        self.tree({2: ["herdr", "--machine", "build"]})
+        target = ht.herdr_target(1)
+        self.assertEqual(target.host, "build")
+        self.assertIn("--machine build", target.problem)
+
+    def test_remote_without_value_is_a_problem(self):
+        self.tree({2: ["herdr", "--remote="]})
+        self.assertIn("--remote without a value", ht.herdr_target(1).problem)
+
     def test_server_process_is_skipped(self):
         self.tree({2: ["herdr", "server"]})
         self.assertIsNone(ht.herdr_target(1))

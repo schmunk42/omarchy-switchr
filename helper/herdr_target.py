@@ -9,7 +9,9 @@ trimmed to what switchr needs. It is copied rather than imported so that
 the plugin carries no dependency on scripts outside its own directory.
 Changes against the original: messages in English, the herdr config
 directory is resolved at call time (`herdr_config_dir()`) instead of at
-import, and the terminal class set also lists kitty and Alacritty.
+import, the terminal class set also lists kitty and Alacritty, and the
+launch options are also matched in their `--option=value` form, with
+`--machine` handled like `--remote` (`option_value()`).
 
 Why this is needed: herdr is not a window class of its own but a layer
 INSIDE a foot/ghostty/... window -- a client in the window, a server next to
@@ -163,6 +165,22 @@ def descendants(pid):
                 return
 
 
+def option_value(args, name):
+    """The value of a launch option in either form, or None.
+
+    `(found, value)`: found is True when the option is present at all;
+    value is the following argument (`--session Earth`) or the part after
+    `=` (`--session=Earth`), None when it is missing or empty.
+    """
+    for index, arg in enumerate(args):
+        if arg == name:
+            value = args[index + 1] if index + 1 < len(args) else None
+            return True, value or None
+        if arg.startswith(name + "="):
+            return True, arg[len(name) + 1:] or None
+    return False, None
+
+
 def herdr_target(window_pid):
     """Which herdr session runs in this window, or None.
 
@@ -192,25 +210,32 @@ def herdr_target(window_pid):
 
         # A session on another machine: the panes live there. The socket is
         # in the environment of the client child process, not the starter.
-        if "--remote" in rest:
-            index = rest.index("--remote")
-            host = rest[index + 1] if index + 1 < len(rest) else None
+        # `--machine` (a saved SSH machine) is the same case. Both options
+        # are matched as `--remote host` and as `--remote=host`: falling
+        # through to "default" would list the tabs of a local session under
+        # this window, the plausible-but-wrong answer this module avoids.
+        for option in ("--remote", "--machine"):
+            found, host = option_value(rest, option)
+            if not found:
+                continue
+            if not host:
+                return HerdrTarget(None, None, None,
+                                   "herdr {} without a value: {}".format(option, " ".join(argv)))
             for kid in descendants(pid):
                 if cmdline_of(kid)[1:2] == ["client"]:
                     sock = environ_of(kid).get("HERDR_CLIENT_SOCKET_PATH")
                     if sock:
                         return HerdrTarget("remote:{}".format(host), sock, host, None)
             return HerdrTarget(None, None, host,
-                               "herdr --remote {}: no client with "
-                               "HERDR_CLIENT_SOCKET_PATH in the process tree".format(host))
+                               "herdr {} {}: no client with "
+                               "HERDR_CLIENT_SOCKET_PATH in the process tree".format(option, host))
 
-        if "--session" in rest:
-            index = rest.index("--session")
-            name = rest[index + 1] if index + 1 < len(rest) else None
-        elif rest[:2] == ["session", "attach"]:
-            name = rest[2] if len(rest) > 2 else None
-        else:
-            name = "default"
+        found, name = option_value(rest, "--session")
+        if not found:
+            if rest[:2] == ["session", "attach"]:
+                name = rest[2] if len(rest) > 2 else None
+            else:
+                name = "default"
 
         if not name:
             return HerdrTarget(None, None, None,
